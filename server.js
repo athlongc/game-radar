@@ -696,6 +696,12 @@ async function getMetrics(force = false) {
   return { ...cachedMetrics, cached: false };
 }
 
+function isLocalRequest(req) {
+  const rawHost = req.headers.host || "";
+  const host = rawHost.startsWith("[") ? rawHost.slice(1, rawHost.indexOf("]")) : rawHost.split(":")[0];
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const requestPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
@@ -721,7 +727,8 @@ createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname === "/api/metrics") {
-      json(res, 200, await getMetrics(url.searchParams.get("force") === "1"));
+      const force = url.searchParams.get("force") === "1" && isLocalRequest(req);
+      json(res, 200, await getMetrics(force));
       return;
     }
     if (url.pathname === "/api/health") {

@@ -20,6 +20,10 @@ const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
 
 let currentMetrics = null;
 
+function canForceRefresh() {
+  return location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "::1";
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -466,10 +470,11 @@ function renderLeaderList(chartRank) {
 }
 
 async function load(force = false) {
+  const shouldForce = force && canForceRefresh();
   refreshButton.disabled = true;
-  statusEl.textContent = force ? "正在强制刷新" : "正在加载";
+  statusEl.textContent = shouldForce ? "正在强制刷新" : "正在加载";
   try {
-    currentMetrics = await fetchJson(`/api/metrics${force ? "?force=1" : ""}`);
+    currentMetrics = await fetchJson(`/api/metrics${shouldForce ? "?force=1" : ""}`);
     render(currentMetrics);
     statusEl.textContent = `${formatTime(currentMetrics.generatedAt)}${currentMetrics.cached ? " · 缓存" : ""}`;
   } catch (error) {
