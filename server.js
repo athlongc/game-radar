@@ -9,6 +9,7 @@ const publicDir = join(__dirname, "public");
 const PORT = Number(process.env.PORT || 5177);
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const AMAZON_CACHE_TTL_MS = 60 * 60 * 1000;
+const PUBLIC_DASHBOARD_ID = "heartopia";
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
 const numberFormatter = new Intl.NumberFormat("zh-CN", {
   maximumFractionDigits: 2,
@@ -255,8 +256,7 @@ const dashboards = [
   }
 ];
 
-let cachedMetrics = null;
-let cachedAt = 0;
+const metricsCache = new Map();
 const amazonCache = new Map();
 
 const contentTypes = {
@@ -600,10 +600,10 @@ async function getAmazonBestseller(monitor, brandPatterns = [], force = false) {
   return data;
 }
 
-async function collectMetrics(force = false) {
+async function collectMetrics(force = false, selectedDashboards = dashboards) {
   const now = new Date().toISOString();
   const metrics = await Promise.all(
-    dashboards.map(async (dashboard) => {
+    selectedDashboards.map(async (dashboard) => {
       const [steam, steamReviews, stockQuote] = await Promise.all([
         dashboard.steamAppId ? getSteamMetric(dashboard.steamAppId).catch((error) => ({ error: error.message })) : null,
         dashboard.steamAppId
@@ -687,13 +687,16 @@ async function collectMetrics(force = false) {
   return payload;
 }
 
-async function getMetrics(force = false) {
-  if (!force && cachedMetrics && Date.now() - cachedAt < CACHE_TTL_MS) {
-    return { ...cachedMetrics, cached: true };
+async function getMetrics({ force = false, dashboardId = null } = {}) {
+  const selectedDashboards = dashboardId ? dashboards.filter((dashboard) => dashboard.id === dashboardId) : dashboards;
+  const cacheKey = dashboardId || "all";
+  const cached = metricsCache.get(cacheKey);
+  if (!force && cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    return { ...cached.data, cached: true };
   }
-  cachedMetrics = await collectMetrics(force);
-  cachedAt = Date.now();
-  return { ...cachedMetrics, cached: false };
+  const data = await collectMetrics(force, selectedDashboards);
+  metricsCache.set(cacheKey, { cachedAt: Date.now(), data });
+  return { ...data, cached: false };
 }
 
 function isLocalRequest(req) {
@@ -727,8 +730,12 @@ createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname === "/api/metrics") {
-      const force = url.searchParams.get("force") === "1" && isLocalRequest(req);
-      json(res, 200, await getMetrics(force));
+      const local = isLocalRequest(req);
+      const requestedDashboardId = url.searchParams.get("dashboard") || "";
+      const dashboardId = local ? requestedDashboardId || null : PUBLIC_DASHBOARD_ID;
+      const force =
+        url.searchParams.get("force") === "1" && (local || dashboardId === PUBLIC_DASHBOARD_ID);
+      json(res, 200, await getMetrics({ force, dashboardId }));
       return;
     }
     if (url.pathname === "/api/health") {

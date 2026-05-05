@@ -17,11 +17,28 @@ const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit"
 });
+const PUBLIC_DASHBOARD_ID = "heartopia";
 
 let currentMetrics = null;
 
-function canForceRefresh() {
+function isLocalHost() {
   return location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "::1";
+}
+
+function canForceRefresh() {
+  return isLocalHost() || currentMetrics?.dashboards?.[0]?.id === PUBLIC_DASHBOARD_ID;
+}
+
+function getMetricsUrl(force = false) {
+  const params = new URLSearchParams();
+  if (!isLocalHost()) {
+    params.set("dashboard", PUBLIC_DASHBOARD_ID);
+  }
+  if (force && canForceRefresh()) {
+    params.set("force", "1");
+  }
+  const query = params.toString();
+  return `/api/metrics${query ? `?${query}` : ""}`;
 }
 
 async function fetchJson(url) {
@@ -86,6 +103,10 @@ function render(metrics) {
 }
 
 function renderNav(dashboards, activeId) {
+  if (dashboards.length <= 1) {
+    pageNavEl.innerHTML = "";
+    return;
+  }
   pageNavEl.innerHTML = dashboards
     .map(
       (dashboard) => `
@@ -474,7 +495,7 @@ async function load(force = false) {
   refreshButton.disabled = true;
   statusEl.textContent = shouldForce ? "正在强制刷新" : "正在加载";
   try {
-    currentMetrics = await fetchJson(`/api/metrics${shouldForce ? "?force=1" : ""}`);
+    currentMetrics = await fetchJson(getMetricsUrl(shouldForce));
     render(currentMetrics);
     statusEl.textContent = `${formatTime(currentMetrics.generatedAt)}${currentMetrics.cached ? " · 缓存" : ""}`;
   } catch (error) {
