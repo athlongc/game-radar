@@ -344,6 +344,11 @@ function renderMonitorList(dashboard) {
     return;
   }
 
+  if (dashboard.researchReports) {
+    renderResearchMonitorList(dashboard);
+    return;
+  }
+
   if (!dashboard.steam) {
     monitorListEl.innerHTML = "";
     return;
@@ -376,6 +381,52 @@ function renderMonitorList(dashboard) {
       </div>
     </article>
   `;
+}
+
+function renderResearchMonitorList(dashboard) {
+  const reports = dashboard.researchReports;
+  monitorListEl.innerHTML = `
+    <article class="game-card research-card">
+      <div class="game-head">
+        <div>
+          <h3>${escapeHtml(dashboard.title)}</h3>
+          <p class="publisher">${escapeHtml(dashboard.publisher || "")}</p>
+        </div>
+        <div class="steam-pills">
+          <div class="steam-pill">${escapeHtml(reports.label || "研报")}</div>
+          <div class="steam-pill review-pill">更新 ${formatTime(reports.updatedAt)}</div>
+        </div>
+      </div>
+      ${
+        reports.error
+          ? `<div class="rank-box"><div class="rank-value outside">暂无</div><div class="rank-label">${escapeHtml(reports.error)}</div></div>`
+          : `<div class="research-list">
+              ${(reports.items || []).map(renderResearchReport).join("")}
+            </div>`
+      }
+      ${
+        reports.sourceUrl
+          ? `<div class="meta-line research-source"><a href="${escapeHtml(reports.sourceUrl)}" target="_blank" rel="noreferrer">九号投资者关系</a></div>`
+          : ""
+      }
+    </article>
+  `;
+}
+
+function renderResearchReport(report) {
+  const meta = [report.organizationName, report.rating ? `评级 ${report.rating}` : ""].filter(Boolean).join(" · ");
+  const title = escapeHtml(report.title || "未命名研报");
+  const body = `
+    <div>
+      <div class="research-title">${title}</div>
+      ${meta ? `<div class="research-meta">${escapeHtml(meta)}</div>` : ""}
+    </div>
+    <time>${escapeHtml(report.publishDate || "")}</time>
+  `;
+  if (report.url) {
+    return `<a class="research-item" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">${body}</a>`;
+  }
+  return `<div class="research-item">${body}</div>`;
 }
 
 function renderAmazonMonitorList(dashboard) {

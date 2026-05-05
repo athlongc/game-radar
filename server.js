@@ -156,7 +156,13 @@ const dashboards = [
       { country: "fr", label: "法国 iOS", appId: "1484302191", charts: [{ key: "freeUtilities", label: "法国工具免费榜", feed: "topfreeapplications", genre: "6002" }] },
       { country: "ca", label: "加拿大 iOS", appId: "1484302191", charts: [{ key: "freeUtilities", label: "加拿大工具免费榜", feed: "topfreeapplications", genre: "6002" }] },
       { country: "au", label: "澳大利亚 iOS", appId: "1484302191", charts: [{ key: "freeUtilities", label: "澳大利亚工具免费榜", feed: "topfreeapplications", genre: "6002" }] }
-    ]
+    ],
+    researchReports: {
+      label: "研报",
+      url: "https://zh-cn.ninebot.com/bin/reportList",
+      pageSize: 3,
+      sourceUrl: "https://zh-cn.ninebot.com/explore/investor.html"
+    }
   },
   {
     id: "navimow",
@@ -282,6 +288,27 @@ async function fetchJson(url) {
   try {
     const response = await fetch(url, {
       headers: { "user-agent": "GameRadar/0.1" },
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function postJson(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": "GameRadar/0.1"
+      },
       signal: controller.signal
     });
     if (!response.ok) {
@@ -579,6 +606,29 @@ function getAmazonBrandRanks(items, patterns = []) {
   });
 }
 
+async function getResearchReports(config = {}) {
+  const pageSize = config.pageSize || 3;
+  const url = `${config.url}?pageNum=0&pageSize=${pageSize}`;
+  const data = await postJson(url);
+  if (data?.code !== "0" || !Array.isArray(data.rows)) {
+    throw new Error(data?.msg || "Research reports unavailable");
+  }
+  return {
+    label: config.label || "研报",
+    sourceUrl: config.sourceUrl || "",
+    items: data.rows.slice(0, pageSize).map((item) => ({
+      id: item.id || "",
+      title: item.title || "",
+      publishDate: item.publishDate || "",
+      organizationName: item.organizationName || "",
+      rating: item.rating || "",
+      url: item.attachmentUrl || ""
+    })),
+    total: data.total || 0,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 async function getAmazonBestseller(monitor, brandPatterns = [], force = false) {
   const cached = amazonCache.get(monitor.url);
   if (!force && cached && Date.now() - cached.cachedAt < AMAZON_CACHE_TTL_MS) {
@@ -653,7 +703,17 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
           }))
         )
       );
-      return { ...dashboard, steam, steamReviews, stockQuote, apple, amazon };
+      const researchReports = dashboard.researchReports
+        ? await getResearchReports(dashboard.researchReports).catch((error) => ({
+            label: dashboard.researchReports.label || "研报",
+            sourceUrl: dashboard.researchReports.sourceUrl || "",
+            items: [],
+            total: 0,
+            updatedAt: new Date().toISOString(),
+            error: error.message || "Research reports unavailable"
+          }))
+        : null;
+      return { ...dashboard, steam, steamReviews, stockQuote, apple, amazon, researchReports };
     })
   );
 

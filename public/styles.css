@@ -500,6 +500,56 @@ button:disabled {
   padding-left: 20px;
 }
 
+.research-card {
+  padding-bottom: 12px;
+}
+
+.research-list {
+  display: grid;
+}
+
+.research-item {
+  align-items: center;
+  border-top: 1px solid var(--soft);
+  color: inherit;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 14px 0;
+  text-decoration: none;
+}
+
+.research-item:first-child {
+  border-top: 0;
+}
+
+.research-item:hover .research-title {
+  color: var(--accent);
+}
+
+.research-title {
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.research-meta,
+.research-item time {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.research-meta {
+  margin-top: 5px;
+}
+
+.research-source {
+  border-top: 1px solid var(--soft);
+  margin-top: 0;
+  padding-top: 12px;
+}
+
 .amazon-top-list {
   display: grid;
   gap: 10px;
