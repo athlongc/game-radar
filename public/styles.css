@@ -320,11 +320,9 @@ button:disabled {
 
 .taptap-value {
   color: var(--ink);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 900;
   line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

@@ -56,7 +56,8 @@ function formatNumber(value) {
 
 function formatWan(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return "暂无";
-  return `${(Number(value) / 10000).toFixed(1)}万`;
+  const wan = Number(value) / 10000;
+  return wan >= 1000 ? `${Math.round(wan)}万` : `${wan.toFixed(1)}万`;
 }
 
 function escapeHtml(value = "") {
@@ -195,7 +196,7 @@ function renderSummary(dashboard) {
       downloads: formatWan(dashboard.tapTap.downloadCount),
       rating: dashboard.tapTap.rating == null ? "暂无" : `${dashboard.tapTap.rating}`,
       rank: dashboard.tapTap.downloadRank || "暂无",
-      note: dashboard.tapTap.ratingCount == null ? "评分" : `${formatNumber(dashboard.tapTap.ratingCount)} 个评分`,
+      note: dashboard.tapTap.ratingCount == null ? "评分" : `${formatWan(dashboard.tapTap.ratingCount)}评分`,
       url: dashboard.tapTap.url || "",
       error: dashboard.tapTap.error
     });
