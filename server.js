@@ -30,6 +30,11 @@ const dashboards = [
       label: "心动公司股价",
       externalUrl: "https://xueqiu.com/S/02400"
     },
+    tapTap: {
+      label: "TapTap",
+      appId: "45213",
+      url: "https://www.taptap.cn/app/45213"
+    },
     appleMonitors: [
       {
         country: "cn",
@@ -355,6 +360,42 @@ function parseLegacyAppleFeed(feed) {
   }));
 }
 
+function parseTapTapMetric(html, config) {
+  const jsonLdBlocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi)]
+    .map((match) => {
+      try {
+        return JSON.parse(match[1]);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  const gameData = jsonLdBlocks.find((item) => item?.["@type"] === "VideoGame") || {};
+  const downloadCount = Number(gameData?.interactionStatistic?.userInteractionCount ?? NaN);
+  const rating = Number(gameData?.aggregateRating?.ratingValue ?? NaN);
+  const ratingCount = Number(gameData?.aggregateRating?.ratingCount ?? NaN);
+  const rank = (html.match(/热门下载榜","(#[^"]+)"/) || [])[1] || "";
+  return {
+    label: config.label || "TapTap",
+    appId: config.appId || "",
+    url: config.url,
+    downloadCount: Number.isFinite(downloadCount) ? downloadCount : null,
+    rating: Number.isFinite(rating) ? rating : null,
+    ratingCount: Number.isFinite(ratingCount) ? ratingCount : null,
+    downloadRank: rank,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function getTapTapMetric(config) {
+  const html = await fetchText(config.url, {
+    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "user-agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  });
+  return parseTapTapMetric(html, config);
+}
+
 async function getSteamMetric(appId) {
   const url = `https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appId}`;
   const data = await fetchJson(url);
@@ -654,12 +695,13 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
   const now = new Date().toISOString();
   const metrics = await Promise.all(
     selectedDashboards.map(async (dashboard) => {
-      const [steam, steamReviews, stockQuote] = await Promise.all([
+      const [steam, steamReviews, stockQuote, tapTap] = await Promise.all([
         dashboard.steamAppId ? getSteamMetric(dashboard.steamAppId).catch((error) => ({ error: error.message })) : null,
         dashboard.steamAppId
           ? getSteamReviewMetric(dashboard.steamAppId).catch((error) => ({ error: error.message }))
           : null,
-        dashboard.stockQuote ? getStockQuote(dashboard.stockQuote).catch((error) => ({ error: error.message })) : null
+        dashboard.stockQuote ? getStockQuote(dashboard.stockQuote).catch((error) => ({ error: error.message })) : null,
+        dashboard.tapTap ? getTapTapMetric(dashboard.tapTap).catch((error) => ({ ...dashboard.tapTap, error: error.message })) : null
       ]);
       const apple = await Promise.all(
         (dashboard.appleMonitors || []).map(async (listing) => {
@@ -713,7 +755,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
             error: error.message || "Research reports unavailable"
           }))
         : null;
-      return { ...dashboard, steam, steamReviews, stockQuote, apple, amazon, researchReports };
+      return { ...dashboard, steam, steamReviews, stockQuote, tapTap, apple, amazon, researchReports };
     })
   );
 

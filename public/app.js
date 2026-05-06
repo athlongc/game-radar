@@ -183,6 +183,19 @@ function renderSummary(dashboard) {
     });
   }
 
+  if (dashboard.tapTap) {
+    cards.splice(dashboard.steam && dashboard.stockQuote ? 2 : dashboard.stockQuote ? 1 : 0, 0, {
+      type: "taptap",
+      label: dashboard.tapTap.label || "TapTap",
+      downloads: formatNumber(dashboard.tapTap.downloadCount),
+      rating: dashboard.tapTap.rating == null ? "暂无" : `${dashboard.tapTap.rating}`,
+      rank: dashboard.tapTap.downloadRank || "暂无",
+      note: dashboard.tapTap.ratingCount == null ? "评分" : `${formatNumber(dashboard.tapTap.ratingCount)} 个评分`,
+      url: dashboard.tapTap.url || "",
+      error: dashboard.tapTap.error
+    });
+  }
+
   summaryEl.innerHTML = cards
     .map((card) => {
       if (card.type === "steam") {
@@ -221,6 +234,34 @@ function renderSummary(dashboard) {
                  <div class="metric-note">延迟行情 · ${card.quoteTime} · 量 ${card.volume}</div>`
           }
         `
+        );
+      }
+
+      if (card.type === "taptap") {
+        return renderMetricShell(
+          card,
+          `
+          <div class="metric-label">${escapeHtml(card.label)}</div>
+          ${
+            card.error
+              ? `<div class="metric-value outside">暂无</div><div class="metric-note">${escapeHtml(card.error)}</div>`
+              : `<div class="taptap-metrics">
+                  <div>
+                    <div class="taptap-value">${escapeHtml(card.downloads)}</div>
+                    <div class="metric-note">总下载量</div>
+                  </div>
+                  <div>
+                    <div class="taptap-value">${escapeHtml(card.rating)}</div>
+                    <div class="metric-note">${escapeHtml(card.note)}</div>
+                  </div>
+                  <div>
+                    <div class="taptap-value">${escapeHtml(card.rank)}</div>
+                    <div class="metric-note">热门下载榜</div>
+                  </div>
+                </div>`
+          }
+        `,
+          "taptap-metric-card"
         );
       }
 

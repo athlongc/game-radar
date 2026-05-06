@@ -294,14 +294,42 @@ button:disabled {
   color: var(--accent-2);
 }
 
-.steam-metric-card {
-  grid-column: span 2;
-}
-
 .steam-metric {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.steam-metric-card .metric-label {
+  font-size: 12px;
+}
+
+.steam-metric-card .metric-value {
+  font-size: 28px;
+}
+
+.steam-metric-card .metric-note {
+  font-size: 12px;
+}
+
+.taptap-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.taptap-value {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taptap-metric-card .metric-note {
+  font-size: 12px;
 }
 
 .panel {
@@ -671,6 +699,7 @@ button:disabled {
 
   .actions,
   .steam-metric,
+  .taptap-metrics,
   .amazon-summary-ranks,
   .rank-comparison,
   .rank-row {
@@ -678,10 +707,6 @@ button:disabled {
     flex-direction: column;
     grid-template-columns: 1fr;
     width: 100%;
-  }
-
-  .steam-metric-card {
-    grid-column: span 1;
   }
 
   .comparison-metric {
