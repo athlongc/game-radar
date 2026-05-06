@@ -54,6 +54,11 @@ function formatNumber(value) {
   return numberFormatter.format(value);
 }
 
+function formatWan(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "暂无";
+  return `${(Number(value) / 10000).toFixed(1)}万`;
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -187,7 +192,7 @@ function renderSummary(dashboard) {
     cards.splice(dashboard.steam && dashboard.stockQuote ? 2 : dashboard.stockQuote ? 1 : 0, 0, {
       type: "taptap",
       label: dashboard.tapTap.label || "TapTap",
-      downloads: formatNumber(dashboard.tapTap.downloadCount),
+      downloads: formatWan(dashboard.tapTap.downloadCount),
       rating: dashboard.tapTap.rating == null ? "暂无" : `${dashboard.tapTap.rating}`,
       rank: dashboard.tapTap.downloadRank || "暂无",
       note: dashboard.tapTap.ratingCount == null ? "评分" : `${formatNumber(dashboard.tapTap.ratingCount)} 个评分`,
