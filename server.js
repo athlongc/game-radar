@@ -9,6 +9,7 @@ const publicDir = join(__dirname, "public");
 const PORT = Number(process.env.PORT || 5177);
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const AMAZON_CACHE_TTL_MS = 60 * 60 * 1000;
+const STEAM_TOP_SELLER_TOP_LIMIT = 100;
 const PUBLIC_DASHBOARD_ID = "heartopia";
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
 const numberFormatter = new Intl.NumberFormat("zh-CN", {
@@ -24,6 +25,16 @@ const dashboards = [
     publisher: "XD",
     steamAppId: "4025700",
     steamExternalUrl: "https://steamdb.info/app/4025700/charts/",
+    steamTopSellerMarkets: [
+      { country: "global", label: "全球畅销", displayCode: "Global", url: "https://store.steampowered.com/charts/topselling/global" },
+      { country: "th", label: "泰区畅销", displayCode: "TH", url: "https://store.steampowered.com/charts/topselling/TH" },
+      { country: "jp", label: "日区畅销", displayCode: "JP", url: "https://store.steampowered.com/charts/topselling/JP" },
+      { country: "kr", label: "韩区畅销", displayCode: "KR", url: "https://store.steampowered.com/charts/topselling/KR" },
+      { country: "tw", label: "台区畅销", displayCode: "TW", url: "https://store.steampowered.com/charts/topselling/TW" },
+      { country: "us", label: "美区畅销", displayCode: "US", url: "https://store.steampowered.com/charts/topselling/US" },
+      { country: "fr", label: "法国畅销", displayCode: "FR", url: "https://store.steampowered.com/charts/topselling/FR" },
+      { country: "br", label: "巴西畅销", displayCode: "BR", url: "https://store.steampowered.com/charts/topselling/BR" }
+    ],
     stockQuote: {
       symbol: "02400.HK",
       code: "hk02400",
@@ -426,6 +437,90 @@ async function getSteamReviewMetric(appId) {
   };
 }
 
+function getSteamTopSellerSearchUrl(country) {
+  const isGlobal = !country || country === "global";
+  const url = new URL("https://store.steampowered.com/search/results/");
+  url.searchParams.set("query", "");
+  url.searchParams.set("start", "0");
+  url.searchParams.set("count", String(STEAM_TOP_SELLER_TOP_LIMIT));
+  url.searchParams.set("dynamic_data", "");
+  url.searchParams.set("sort_by", "_ASC");
+  url.searchParams.set("snr", "1_7_7_7000_7");
+  url.searchParams.set("filter", isGlobal ? "globaltopsellers" : "topsellers");
+  url.searchParams.set("infinite", "1");
+  url.searchParams.set("l", "english");
+  if (!isGlobal) {
+    url.searchParams.set("cc", country.toUpperCase());
+  }
+  return url.toString();
+}
+
+function getFallbackSteamChartsUrl(country) {
+  return `https://store.steampowered.com/charts/topselling/${country === "global" ? "global" : country.toUpperCase()}`;
+}
+
+function parseSteamSearchResults(html = "") {
+  return [...html.matchAll(/<a\b[^>]*class="[^"]*search_result_row[\s\S]*?<\/a>/gi)]
+    .map((match) => {
+      const block = match[0];
+      const appId = (block.match(/data-ds-appid="(\d+)"/) || [])[1] || "";
+      const url = decodeHtml((block.match(/href="([^"]+)"/) || [])[1] || "");
+      const title = decodeHtml((block.match(/<span class="title">([\s\S]*?)<\/span>/i) || [])[1] || "");
+      const imageUrl = decodeHtml((block.match(/<img[^>]+src="([^"]+)"/i) || [])[1] || "");
+      const price = decodeHtml((block.match(/<div class="discount_final_price[^"]*">([\s\S]*?)<\/div>/i) || [])[1] || "");
+      return { appId, title, url, imageUrl, price };
+    })
+    .filter((item) => item.appId && item.title);
+}
+
+async function getSteamTopSellerMarket(appId, market) {
+  const country = (market.country || "global").toLowerCase();
+  const searchUrl = getSteamTopSellerSearchUrl(country);
+  const data = await fetchJson(searchUrl);
+  if (data?.success !== 1) {
+    throw new Error(`Steam top sellers unavailable for ${market.displayCode || country}`);
+  }
+  const items = parseSteamSearchResults(data.results_html || "");
+  const foundIndex = items.findIndex((item) => item.appId === appId);
+  return {
+    ...market,
+    country,
+    displayCode: market.displayCode || country.toUpperCase(),
+    rank: foundIndex >= 0 ? foundIndex + 1 : null,
+    topLimit: STEAM_TOP_SELLER_TOP_LIMIT,
+    totalCount: data.total_count ?? null,
+    leaders: items.slice(0, 5),
+    url: market.url || getFallbackSteamChartsUrl(country),
+    sourceUrl: searchUrl,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function getSteamTopSellers(appId, markets = []) {
+  const selectedMarkets = markets.length ? markets : [{ country: "global", label: "全球畅销", displayCode: "Global" }];
+  const results = await Promise.all(
+    selectedMarkets.map((market) =>
+      getSteamTopSellerMarket(appId, market).catch((error) => ({
+        ...market,
+        country: (market.country || "global").toLowerCase(),
+        displayCode: market.displayCode || (market.country || "global").toUpperCase(),
+        rank: null,
+        topLimit: STEAM_TOP_SELLER_TOP_LIMIT,
+        leaders: [],
+        url: market.url || getFallbackSteamChartsUrl((market.country || "global").toLowerCase()),
+        updatedAt: new Date().toISOString(),
+        error: error.message || "Steam top sellers unavailable"
+      }))
+    )
+  );
+  return {
+    appId,
+    markets: results,
+    global: results.find((market) => market.country === "global") || null,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 async function getStockQuote(stock) {
   const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${stock.code},day,,,1,qfq`;
   const data = await fetchJson(url);
@@ -695,10 +790,18 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
   const now = new Date().toISOString();
   const metrics = await Promise.all(
     selectedDashboards.map(async (dashboard) => {
-      const [steam, steamReviews, stockQuote, tapTap] = await Promise.all([
+      const [steam, steamReviews, steamTopSellers, stockQuote, tapTap] = await Promise.all([
         dashboard.steamAppId ? getSteamMetric(dashboard.steamAppId).catch((error) => ({ error: error.message })) : null,
         dashboard.steamAppId
           ? getSteamReviewMetric(dashboard.steamAppId).catch((error) => ({ error: error.message }))
+          : null,
+        dashboard.steamAppId
+          ? getSteamTopSellers(dashboard.steamAppId, dashboard.steamTopSellerMarkets || []).catch((error) => ({
+              appId: dashboard.steamAppId,
+              markets: [],
+              global: null,
+              error: error.message || "Steam top sellers unavailable"
+            }))
           : null,
         dashboard.stockQuote ? getStockQuote(dashboard.stockQuote).catch((error) => ({ error: error.message })) : null,
         dashboard.tapTap ? getTapTapMetric(dashboard.tapTap).catch((error) => ({ ...dashboard.tapTap, error: error.message })) : null
@@ -755,7 +858,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
             error: error.message || "Research reports unavailable"
           }))
         : null;
-      return { ...dashboard, steam, steamReviews, stockQuote, tapTap, apple, amazon, researchReports };
+      return { ...dashboard, steam, steamReviews, steamTopSellers, stockQuote, tapTap, apple, amazon, researchReports };
     })
   );
 
@@ -767,6 +870,10 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
       {
         name: "Steam Web API",
         url: "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/"
+      },
+      {
+        name: "Steam Top Sellers Search",
+        url: "https://store.steampowered.com/search/?filter=topsellers"
       },
       {
         name: "Apple iTunes RSS",

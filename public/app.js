@@ -74,6 +74,17 @@ function formatRank(rank, limit = 100) {
   return `#${rank}`;
 }
 
+function getSteamTopSeller(dashboard, country = "global") {
+  const normalizedCountry = String(country || "global").toLowerCase();
+  return (dashboard.steamTopSellers?.markets || []).find((market) => market.country === normalizedCountry) || null;
+}
+
+function formatSteamTopSellerRank(market) {
+  if (!market) return "暂无";
+  if (market.error) return "暂无";
+  return formatRank(market.rank, market.topLimit || 100);
+}
+
 function formatPrice(value, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(value)) return "暂无";
   return Number(value).toFixed(digits);
@@ -128,6 +139,7 @@ function renderSummary(dashboard) {
   const rankCards = (dashboard.apple || []).flatMap((listing) =>
     listing.ranks.map((rank, index) => {
       const comparisonRank = listing.comparison?.ranks?.[index];
+      const steamTopSeller = getSteamTopSeller(dashboard, listing.country);
       return {
         type: "rank",
         label: rank.label,
@@ -138,6 +150,13 @@ function renderSummary(dashboard) {
           ? {
               label: listing.comparison.label,
               value: formatRank(comparisonRank.rank, comparisonRank.topLimit)
+            }
+          : steamTopSeller
+          ? {
+              label: `Steam ${steamTopSeller.displayCode || listing.country.toUpperCase()}`,
+              value: formatSteamTopSellerRank(steamTopSeller),
+              tone: "steam-comparison",
+              note: steamTopSeller.error || ""
             }
           : null
       };
@@ -168,6 +187,7 @@ function renderSummary(dashboard) {
           positiveRate: dashboard.steamReviews?.positiveRate == null ? "暂无" : `${dashboard.steamReviews.positiveRate}%`,
           reviewNote: `${dashboard.steamReviews?.reviewScoreDesc || "评价"} · ${formatNumber(dashboard.steamReviews?.totalReviews)} 条`,
           note: `AppID ${dashboard.steam.appId || "-"}`,
+          topSeller: getSteamTopSeller(dashboard, "global"),
           url: dashboard.steamExternalUrl || ""
         },
         ...rankCards
@@ -219,6 +239,13 @@ function renderSummary(dashboard) {
               <div class="metric-value">${card.positiveRate}</div>
               <div class="metric-note">${card.reviewNote}</div>
             </div>
+          </div>
+          <div class="steam-topseller-strip">
+            <div>
+              <div class="steam-topseller-label">Steam 全球畅销</div>
+              <div class="metric-note">${escapeHtml(card.topSeller?.displayCode || "Global")}</div>
+            </div>
+            <div class="steam-topseller-value">${escapeHtml(formatSteamTopSellerRank(card.topSeller))}</div>
           </div>
         `,
           "steam-metric-card"
@@ -308,7 +335,7 @@ function renderSummary(dashboard) {
                      <div class="metric-note">${card.note}</div>
                    </div>
                    <div class="comparison-metric">
-                     <div class="comparison-label">${card.comparison.label}</div>
+                     <div class="comparison-label ${card.comparison.tone || ""}">${card.comparison.label}</div>
                      <div class="comparison-value">${card.comparison.value}</div>
                    </div>
                  </div>`
