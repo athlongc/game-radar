@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Game Radar">
+  <rect width="64" height="64" rx="14" fill="#1f2328"/>
+  <circle cx="32" cy="34" r="18" fill="#fff"/>
+  <circle cx="32" cy="34" r="12" fill="none" stroke="#8b949e" stroke-width="3"/>
+  <path d="M32 16v36M14 34h36" stroke="#1f2328" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 34l13-8" stroke="#1f2328" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="32" cy="34" r="4" fill="#1f2328"/>
+  <text x="17" y="13" fill="#fff" font-family="Inter, Arial, sans-serif" font-size="7" font-weight="800" letter-spacing=".5">RANK</text>
+</svg>

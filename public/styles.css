@@ -251,6 +251,46 @@ button:disabled {
   white-space: nowrap;
 }
 
+.ios-free-rank-card {
+  min-width: 0;
+}
+
+.ios-free-rank-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ios-free-rank-item {
+  background: #f7f8fa;
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  color: inherit;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  text-decoration: none;
+}
+
+.ios-free-rank-item:hover {
+  border-color: rgba(13, 132, 141, 0.36);
+}
+
+.ios-free-rank-country {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ios-free-rank-value {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .rank-comparison-card {
   min-width: 0;
 }
@@ -270,9 +310,28 @@ button:disabled {
 
 .comparison-label {
   color: var(--accent);
+  display: inline-flex;
   font-size: 12px;
   font-weight: 900;
+  line-height: 1.2;
   margin-bottom: 10px;
+  padding: 4px 7px;
+  border-radius: 999px;
+}
+
+.comparison-label.comparison-leading {
+  background: #fdecec;
+  color: #b42318;
+}
+
+.comparison-label.comparison-trailing {
+  background: #eaf7ef;
+  color: #16794c;
+}
+
+.comparison-label.steam-comparison {
+  background: #eef8f8;
+  color: var(--accent);
 }
 
 .comparison-label.steam-comparison {
@@ -303,6 +362,53 @@ button:disabled {
   color: var(--accent-2);
 }
 
+.exchange-rate-card {
+  display: flex;
+  flex-direction: column;
+  grid-column: span 2;
+  grid-row: span 2;
+  justify-content: center;
+  min-height: 128px;
+}
+
+.exchange-rate-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.exchange-rate-item {
+  align-items: end;
+  background: #f7f8fa;
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.exchange-rate-code {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.exchange-rate-name {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.exchange-rate-value {
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: right;
+}
+
 .steam-metric {
   display: grid;
   gap: 14px;
@@ -315,8 +421,8 @@ button:disabled {
   border: 1px solid var(--soft);
   border-radius: 8px;
   display: flex;
-  gap: 14px;
   justify-content: space-between;
+  gap: 14px;
   margin-top: 18px;
   min-height: 56px;
   padding: 12px;
@@ -710,6 +816,11 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .exchange-rate-card {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   .topbar,
   .game-head {
     align-items: start;
@@ -735,6 +846,8 @@ button:disabled {
   .steam-metric,
   .taptap-metrics,
   .steam-topseller-strip,
+  .exchange-rate-grid,
+  .exchange-rate-item,
   .amazon-summary-ranks,
   .rank-comparison,
   .rank-row {

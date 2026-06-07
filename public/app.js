@@ -18,6 +18,13 @@ const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   minute: "2-digit"
 });
 const PUBLIC_DASHBOARD_ID = "heartopia";
+const IOS_FREE_RANK_GROUP_COUNTRIES = ["cn", "tw", "kr", "th"];
+const IOS_FREE_RANK_GROUP_LABELS = {
+  cn: "中国",
+  tw: "台湾",
+  kr: "韩国",
+  th: "泰国"
+};
 
 let currentMetrics = null;
 
@@ -85,9 +92,30 @@ function formatSteamTopSellerRank(market) {
   return formatRank(market.rank, market.topLimit || 100);
 }
 
+function getRankComparisonTone(primaryRank, comparisonRank) {
+  const normalizeRank = (rank) => {
+    if (rank === null || rank === undefined || rank === "") return null;
+    const value = Number(rank);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  };
+  const primary = normalizeRank(primaryRank);
+  const comparison = normalizeRank(comparisonRank);
+  if (primary === null && comparison === null) return "";
+  if (primary !== null && comparison === null) return "comparison-leading";
+  if (primary === null && comparison !== null) return "comparison-trailing";
+  if (primary < comparison) return "comparison-leading";
+  if (primary > comparison) return "comparison-trailing";
+  return "";
+}
+
 function formatPrice(value, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(value)) return "暂无";
   return Number(value).toFixed(digits);
+}
+
+function formatExchangeRate(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "暂无";
+  return Number(value).toFixed(4);
 }
 
 function formatPercent(value) {
@@ -135,33 +163,76 @@ function renderNav(dashboards, activeId) {
     .join("");
 }
 
-function renderSummary(dashboard) {
-  const rankCards = (dashboard.apple || []).flatMap((listing) =>
-    listing.ranks.map((rank, index) => {
-      const comparisonRank = listing.comparison?.ranks?.[index];
-      const steamTopSeller = getSteamTopSeller(dashboard, listing.country);
-      return {
-        type: "rank",
-        label: rank.label,
-        value: formatRank(rank.rank, rank.topLimit),
-        note: listing.label,
-        url: rank.externalUrl || "",
-        comparison: comparisonRank
-          ? {
-              label: listing.comparison.label,
-              value: formatRank(comparisonRank.rank, comparisonRank.topLimit)
-            }
-          : steamTopSeller
-          ? {
-              label: `Steam ${steamTopSeller.displayCode || listing.country.toUpperCase()}`,
-              value: formatSteamTopSellerRank(steamTopSeller),
-              tone: "steam-comparison",
-              note: steamTopSeller.error || ""
-            }
-          : null
-      };
-    })
+function buildRankSummaryCard(dashboard, listing, rank, index) {
+  const comparisonRank = listing.comparison?.ranks?.[index];
+  const steamTopSeller = getSteamTopSeller(dashboard, listing.country);
+  return {
+    type: "rank",
+    label: rank.label,
+    value: formatRank(rank.rank, rank.topLimit),
+    note: listing.label,
+    url: rank.externalUrl || "",
+    comparison: comparisonRank
+      ? {
+          label: listing.comparison.label,
+          value: formatRank(comparisonRank.rank, comparisonRank.topLimit),
+          tone: getRankComparisonTone(rank.rank, comparisonRank.rank)
+        }
+      : steamTopSeller
+      ? {
+          label: `Steam ${steamTopSeller.displayCode || listing.country.toUpperCase()}`,
+          value: formatSteamTopSellerRank(steamTopSeller),
+          tone: "steam-comparison",
+          note: steamTopSeller.error || ""
+        }
+      : null
+  };
+}
+
+function isIosFreeGameRank(dashboard, listing, rank) {
+  return (
+    dashboard.id === PUBLIC_DASHBOARD_ID &&
+    rank.key === "freeGames" &&
+    IOS_FREE_RANK_GROUP_COUNTRIES.includes(listing.country)
   );
+}
+
+function buildIosFreeRankGroupCard(dashboard) {
+  if (dashboard.id !== PUBLIC_DASHBOARD_ID) return null;
+
+  const items = IOS_FREE_RANK_GROUP_COUNTRIES.map((country) => {
+    const listing = (dashboard.apple || []).find((item) => item.country === country);
+    const rank = listing?.ranks?.find((item) => item.key === "freeGames");
+    if (!listing || !rank) return null;
+    return {
+      label: IOS_FREE_RANK_GROUP_LABELS[country] || listing.label,
+      note: listing.label,
+      value: formatRank(rank.rank, rank.topLimit),
+      url: rank.externalUrl || "",
+      error: rank.error || ""
+    };
+  }).filter(Boolean);
+
+  if (!items.length) return null;
+
+  return {
+    type: "iosFreeRankGroup",
+    label: "iOS 免费游戏榜",
+    items
+  };
+}
+
+function renderSummary(dashboard) {
+  const iosFreeRankGroupCard = buildIosFreeRankGroupCard(dashboard);
+  const rankCards = (dashboard.apple || []).flatMap((listing) =>
+    listing.ranks
+      .map((rank, index) => ({ rank, index }))
+      .filter(({ rank }) => !isIosFreeGameRank(dashboard, listing, rank))
+      .map(({ rank, index }) => buildRankSummaryCard(dashboard, listing, rank, index))
+  );
+  if (iosFreeRankGroupCard) {
+    rankCards.unshift(iosFreeRankGroupCard);
+  }
   const amazonCards = (dashboard.amazon || []).map((market) => {
     const top = market.leaders?.[0];
     const navimowItems = (market.leaders || [])
@@ -220,6 +291,15 @@ function renderSummary(dashboard) {
       url: dashboard.tapTap.url || "",
       error: dashboard.tapTap.error
     });
+  }
+
+  if (dashboard.exchangeRates) {
+    const exchangeRateCard = {
+      type: "exchangeRates",
+      ...dashboard.exchangeRates
+    };
+    const exchangeRateIndex = dashboard.id === "ninebot-cn" && cards.length > 6 ? 6 : cards.length;
+    cards.splice(exchangeRateIndex, 0, exchangeRateCard);
   }
 
   summaryEl.innerHTML = cards
@@ -323,6 +403,33 @@ function renderSummary(dashboard) {
       `;
       }
 
+      if (card.type === "iosFreeRankGroup") {
+        return `
+        <article class="metric-card ios-free-rank-card">
+          <div class="metric-label">${escapeHtml(card.label)}</div>
+          <div class="ios-free-rank-grid">
+            ${card.items.map(renderIosFreeRankItem).join("")}
+          </div>
+        </article>
+      `;
+      }
+
+      if (card.type === "exchangeRates") {
+        return `
+        <article class="metric-card exchange-rate-card">
+          <div class="metric-label">${escapeHtml(card.label || "人民币汇率中间价")}</div>
+          ${
+            card.error
+              ? `<div class="metric-value outside">暂无</div><div class="metric-note">${escapeHtml(card.error)}</div>`
+              : `<div class="exchange-rate-grid">
+                  ${(card.items || []).map(renderExchangeRateItem).join("")}
+                </div>
+                <div class="metric-note">当日 ${escapeHtml(card.latestDate || "未知")} · 上季末 ${escapeHtml(card.quarterBaseDate || "未知")} · ${escapeHtml(card.source || "")}</div>`
+          }
+        </article>
+      `;
+      }
+
       return renderMetricShell(
         card,
         `
@@ -347,6 +454,37 @@ function renderSummary(dashboard) {
       );
     })
     .join("");
+}
+
+function renderIosFreeRankItem(item) {
+  const innerHtml = `
+    <span class="ios-free-rank-country">${escapeHtml(item.label)}</span>
+    <span class="ios-free-rank-value">${escapeHtml(item.error ? "暂无" : item.value)}</span>
+  `;
+  if (item.url) {
+    return `<a class="ios-free-rank-item" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${innerHtml}</a>`;
+  }
+  return `<div class="ios-free-rank-item">${innerHtml}</div>`;
+}
+
+function renderExchangeRateItem(item) {
+  const change = item.kind === "offshoreSpot" ? item.changePercent : item.quarterChangePercent;
+  const isUp = change > 0;
+  const isDown = change < 0;
+  return `
+    <div class="exchange-rate-item">
+      <div>
+        <div class="exchange-rate-code">${escapeHtml(item.code || "")}</div>
+        <div class="exchange-rate-name">${escapeHtml(item.label || "")}</div>
+      </div>
+      <div>
+        <div class="exchange-rate-value">${formatExchangeRate(item.value)}</div>
+        <div class="metric-note stock-change ${isUp ? "up" : ""} ${isDown ? "down" : ""}">
+          ${escapeHtml(item.changeLabel || "涨跌幅")} ${formatPercent(change)}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderMetricShell(card, innerHtml, extraClass = "") {
@@ -479,8 +617,13 @@ function renderResearchMonitorList(dashboard) {
             </div>`
       }
       ${
-        reports.sourceUrl
-          ? `<div class="meta-line research-source"><a href="${escapeHtml(reports.sourceUrl)}" target="_blank" rel="noreferrer">九号投资者关系</a></div>`
+        reports.sourceUrl || reports.bidUrl || reports.jdRankUrl || reports.jdEmotorcycleRankUrl
+          ? `<div class="meta-line research-source">
+              ${reports.sourceUrl ? `<a href="${escapeHtml(reports.sourceUrl)}" target="_blank" rel="noreferrer">九号投资者关系</a>` : ""}
+              ${reports.bidUrl ? `<a href="${escapeHtml(reports.bidUrl)}" target="_blank" rel="noreferrer">九号招标</a>` : ""}
+              ${reports.jdRankUrl ? `<a href="${escapeHtml(reports.jdRankUrl)}" target="_blank" rel="noreferrer">京东电自排名</a>` : ""}
+              ${reports.jdEmotorcycleRankUrl ? `<a href="${escapeHtml(reports.jdEmotorcycleRankUrl)}" target="_blank" rel="noreferrer">京东电摩排名</a>` : ""}
+            </div>`
           : ""
       }
     </article>
