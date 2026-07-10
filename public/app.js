@@ -28,19 +28,12 @@ const IOS_FREE_RANK_GROUP_LABELS = {
 
 let currentMetrics = null;
 
-function isLocalHost() {
-  return location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "::1";
-}
-
 function canForceRefresh() {
-  return isLocalHost() || currentMetrics?.dashboards?.[0]?.id === PUBLIC_DASHBOARD_ID;
+  return Boolean(currentMetrics?.dashboards?.length);
 }
 
 function getMetricsUrl(force = false) {
   const params = new URLSearchParams();
-  if (!isLocalHost()) {
-    params.set("dashboard", PUBLIC_DASHBOARD_ID);
-  }
   if (force && canForceRefresh()) {
     params.set("force", "1");
   }
@@ -67,6 +60,12 @@ function formatWan(value) {
   return wan >= 1000 ? `${Math.round(wan)}万` : `${wan.toFixed(1)}万`;
 }
 
+function formatMarketCapCny(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "暂无";
+  const yi = Number(value) / 100000000;
+  return yi >= 1000 ? `${Math.round(yi).toLocaleString("zh-CN")}亿` : `${yi.toFixed(2)}亿`;
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -74,6 +73,25 @@ function escapeHtml(value = "") {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isTodayDate(value = "") {
+  return String(value).slice(0, 10) === getLocalDateKey();
+}
+
+function getAmazonMarketTargetId(market) {
+  const country = String(market?.country || market?.label || "market")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `amazon-market-${country || "market"}`;
 }
 
 function formatRank(rank, limit = 100) {
@@ -246,7 +264,8 @@ function renderSummary(dashboard) {
       label: market.label,
       value: top ? "#1" : "暂无",
       note: top ? getShortProductName(top.title) : market.error || "暂无数据",
-      navimowItems
+      navimowItems,
+      targetId: getAmazonMarketTargetId(market)
     };
   });
 
@@ -271,6 +290,7 @@ function renderSummary(dashboard) {
       label: dashboard.stockQuote.label || dashboard.stockQuote.symbol,
       price: `${dashboard.stockQuote.currency || "HKD"} ${formatPrice(dashboard.stockQuote.price)}`,
       change: `${formatChange(dashboard.stockQuote.change)} / ${formatPercent(dashboard.stockQuote.changePercent)}`,
+      marketCap: formatMarketCapCny(dashboard.stockQuote.marketCapCny),
       quoteTime: dashboard.stockQuote.quoteTime || "未知时间",
       volume: compactNumberFormatter.format(dashboard.stockQuote.volume || 0),
       isUp: dashboard.stockQuote.change > 0,
@@ -344,6 +364,7 @@ function renderSummary(dashboard) {
                  <div class="metric-note stock-change ${card.isUp ? "up" : ""} ${card.isDown ? "down" : ""}">
                    ${card.change}
                  </div>
+                 <div class="metric-note stock-market-cap">市值 人民币 ${card.marketCap}</div>
                  <div class="metric-note">延迟行情 · ${card.quoteTime} · 量 ${card.volume}</div>`
           }
         `
@@ -380,7 +401,7 @@ function renderSummary(dashboard) {
 
       if (card.type === "amazon") {
         return `
-        <article class="metric-card amazon-summary-card">
+        <article class="metric-card amazon-summary-card" role="button" tabindex="0" data-amazon-target="${escapeHtml(card.targetId)}" aria-label="查看${escapeHtml(card.label)}排名">
           <div class="metric-label">${escapeHtml(card.label)}</div>
           <div class="amazon-summary-ranks">
             <div>
@@ -561,6 +582,11 @@ function renderMonitorList(dashboard) {
     return;
   }
 
+  if (dashboard.newsroom) {
+    renderNewsroomMonitorList(dashboard);
+    return;
+  }
+
   if (!dashboard.steam) {
     monitorListEl.innerHTML = "";
     return;
@@ -595,8 +621,57 @@ function renderMonitorList(dashboard) {
   `;
 }
 
+function renderNewsroomMonitorList(dashboard) {
+  const newsroom = dashboard.newsroom;
+  monitorListEl.innerHTML = `
+    <article class="game-card newsroom-card">
+      <div class="game-head">
+        <div>
+          <h3>${escapeHtml(dashboard.title)}</h3>
+          <p class="publisher">${escapeHtml(dashboard.publisher || "")}</p>
+        </div>
+        <div class="steam-pills">
+          <div class="steam-pill">${escapeHtml(newsroom.label || "Newsroom")}</div>
+          <div class="steam-pill review-pill">更新 ${formatTime(newsroom.updatedAt)}</div>
+        </div>
+      </div>
+      ${
+        newsroom.error
+          ? `<div class="rank-box"><div class="rank-value outside">暂无</div><div class="rank-label">${escapeHtml(newsroom.error)}</div></div>`
+          : `<div class="newsroom-grid">${(newsroom.items || []).map(renderNewsroomItem).join("")}</div>`
+      }
+      ${
+        newsroom.sourceUrl
+          ? `<div class="meta-line research-source">
+              <a href="${escapeHtml(newsroom.sourceUrl)}" target="_blank" rel="noreferrer">Navimow Newsroom</a>
+            </div>`
+          : ""
+      }
+    </article>
+  `;
+}
+
+function renderNewsroomItem(item) {
+  const image = item.imageUrl
+    ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title || "Navimow news")}" loading="lazy">`
+    : `<div class="newsroom-image-placeholder">NEWS</div>`;
+  const body = `
+    <div class="newsroom-image">${image}</div>
+    <div class="newsroom-body">
+      <div class="newsroom-date">${escapeHtml(item.publishDate || "")}</div>
+      <div class="newsroom-title">${escapeHtml(item.title || "Untitled")}</div>
+      ${item.summary ? `<div class="newsroom-summary">${escapeHtml(item.summary)}</div>` : ""}
+    </div>
+  `;
+  if (item.url) {
+    return `<a class="newsroom-item" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${body}</a>`;
+  }
+  return `<div class="newsroom-item">${body}</div>`;
+}
+
 function renderResearchMonitorList(dashboard) {
   const reports = dashboard.researchReports;
+  const notices = dashboard.srmNotices;
   monitorListEl.innerHTML = `
     <article class="game-card research-card">
       <div class="game-head">
@@ -616,6 +691,7 @@ function renderResearchMonitorList(dashboard) {
               ${(reports.items || []).map(renderResearchReport).join("")}
             </div>`
       }
+      ${notices ? renderSrmNoticePanel(notices) : ""}
       ${
         reports.sourceUrl || reports.bidUrl || reports.jdRankUrl || reports.jdEmotorcycleRankUrl
           ? `<div class="meta-line research-source">
@@ -633,17 +709,87 @@ function renderResearchMonitorList(dashboard) {
 function renderResearchReport(report) {
   const meta = [report.organizationName, report.rating ? `评级 ${report.rating}` : ""].filter(Boolean).join(" · ");
   const title = escapeHtml(report.title || "未命名研报");
+  const isToday = isTodayDate(report.publishDate);
   const body = `
     <div>
-      <div class="research-title">${title}</div>
+      <div class="research-title">
+        ${isToday ? `<span class="today-badge">今日</span>` : ""}
+        ${title}
+      </div>
       ${meta ? `<div class="research-meta">${escapeHtml(meta)}</div>` : ""}
     </div>
     <time>${escapeHtml(report.publishDate || "")}</time>
   `;
+  const className = `research-item${isToday ? " research-report-today" : ""}`;
   if (report.url) {
-    return `<a class="research-item" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">${body}</a>`;
+    return `<a class="${className}" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">${body}</a>`;
   }
-  return `<div class="research-item">${body}</div>`;
+  return `<div class="${className}">${body}</div>`;
+}
+
+function renderSrmNoticePanel(notices) {
+  if (notices.error) {
+    return `
+      <section class="srm-notice-panel">
+        <div class="srm-notice-head">
+          <h4>${escapeHtml(notices.label || "SRM 公告")}</h4>
+          <span>更新 ${formatTime(notices.updatedAt)}</span>
+        </div>
+        <div class="rank-box"><div class="rank-value outside">暂无</div><div class="rank-label">${escapeHtml(notices.error)}</div></div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="srm-notice-panel">
+      <div class="srm-notice-head">
+        <h4>${escapeHtml(notices.label || "SRM 公告")}</h4>
+        <span>更新 ${formatTime(notices.updatedAt)}</span>
+      </div>
+      <div class="srm-notice-groups">
+        ${(notices.groups || []).map(renderSrmNoticeGroup).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderSrmNoticeGroup(group) {
+  return `
+    <div class="srm-notice-group">
+      <div class="srm-notice-group-title">
+        <strong>${escapeHtml(group.label || "公告")}</strong>
+        <span>${escapeHtml(group.displayLabel || "前三条")} / 共 ${escapeHtml(group.total ?? 0)} 条</span>
+      </div>
+      ${
+        group.error
+          ? `<div class="research-meta">${escapeHtml(group.error)}</div>`
+          : `<div class="srm-notice-list">${(group.items || []).map(renderSrmNotice).join("")}</div>`
+      }
+    </div>
+  `;
+}
+
+function renderSrmNotice(item) {
+  const meta = [item.organizationName, item.categoryName].filter(Boolean).join(" · ");
+  const isToday = isTodayDate(item.publishDate);
+  const body = `
+    <div>
+      <div class="research-title">
+        ${isToday ? `<span class="today-badge">今日</span>` : ""}
+        ${escapeHtml(item.title || "未命名公告")}
+      </div>
+      ${meta ? `<div class="research-meta">${escapeHtml(meta)}</div>` : ""}
+    </div>
+    <div class="srm-notice-times">
+      ${item.publishDate ? `<time>发布 ${escapeHtml(item.publishDate)}</time>` : ""}
+      ${item.deadlineTime ? `<time>截止 ${escapeHtml(item.deadlineTime)}</time>` : ""}
+    </div>
+  `;
+  const className = `research-item srm-notice-item${isToday ? " srm-notice-today" : ""}`;
+  if (item.url) {
+    return `<a class="${className}" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${body}</a>`;
+  }
+  return `<div class="${className}">${body}</div>`;
 }
 
 function renderAmazonMonitorList(dashboard) {
@@ -667,8 +813,9 @@ function renderAmazonMonitorList(dashboard) {
 }
 
 function renderAmazonMarket(market) {
+  const targetId = getAmazonMarketTargetId(market);
   return `
-    <section class="listing amazon-market">
+    <section class="listing amazon-market" id="${escapeHtml(targetId)}">
       <div class="amazon-market-head">
         <div>
           <div class="listing-title">${escapeHtml(market.label)}</div>
@@ -686,6 +833,34 @@ function renderAmazonMarket(market) {
     </section>
   `;
 }
+
+function scrollToAmazonMarket(targetId) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  target.classList.remove("amazon-market-active");
+  window.setTimeout(() => target.classList.add("amazon-market-active"), 120);
+  window.setTimeout(() => target.classList.remove("amazon-market-active"), 1800);
+}
+
+function getAmazonTargetCard(event) {
+  const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+  return target?.closest("[data-amazon-target]") || null;
+}
+
+summaryEl.addEventListener("click", (event) => {
+  const card = getAmazonTargetCard(event);
+  if (!card) return;
+  scrollToAmazonMarket(card.dataset.amazonTarget);
+});
+
+summaryEl.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const card = getAmazonTargetCard(event);
+  if (!card) return;
+  event.preventDefault();
+  scrollToAmazonMarket(card.dataset.amazonTarget);
+});
 
 function renderAmazonItem(item) {
   const isNavimow = /segway|navimow/i.test(item.title || "");

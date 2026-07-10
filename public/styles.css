@@ -203,6 +203,22 @@ button:disabled {
   overflow: hidden;
 }
 
+.amazon-summary-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.amazon-summary-card:hover {
+  border-color: rgba(13, 132, 141, 0.45);
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.12);
+  transform: translateY(-1px);
+}
+
+.amazon-summary-card:focus-visible {
+  outline: 3px solid rgba(13, 132, 141, 0.24);
+  outline-offset: 3px;
+}
+
 .amazon-summary-ranks {
   align-items: end;
   display: grid;
@@ -360,6 +376,11 @@ button:disabled {
 
 .stock-change.down {
   color: var(--accent-2);
+}
+
+.stock-market-cap {
+  color: var(--ink);
+  font-weight: 900;
 }
 
 .exchange-rate-card {
@@ -549,6 +570,17 @@ button:disabled {
   grid-template-columns: 1fr;
 }
 
+.amazon-market {
+  scroll-margin-top: 24px;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.listing.amazon-market-active {
+  background: #f0fdfa;
+  border-color: rgba(13, 132, 141, 0.58);
+  box-shadow: 0 14px 34px rgba(13, 132, 141, 0.14);
+}
+
 .listing {
   border: 1px solid var(--soft);
   border-radius: 8px;
@@ -696,6 +728,19 @@ button:disabled {
   color: var(--accent);
 }
 
+.research-item.research-report-today {
+  background: #fffbeb;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  margin: 8px -8px;
+  padding: 14px 8px 14px 10px;
+}
+
+.research-report-today .research-title {
+  color: #92400e;
+}
+
 .research-title {
   font-size: 15px;
   font-weight: 900;
@@ -716,6 +761,174 @@ button:disabled {
   border-top: 1px solid var(--soft);
   margin-top: 0;
   padding-top: 12px;
+}
+
+.srm-notice-panel {
+  border-top: 1px solid var(--soft);
+  margin-top: 4px;
+  padding-top: 16px;
+}
+
+.srm-notice-head,
+.srm-notice-group-title {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.srm-notice-head h4 {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+  margin: 0;
+}
+
+.srm-notice-head span,
+.srm-notice-group-title span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.srm-notice-groups {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.srm-notice-group {
+  background: #f8fafc;
+  border: 1px solid var(--soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.srm-notice-group-title strong {
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.srm-notice-item {
+  gap: 12px;
+  min-height: 68px;
+  padding: 12px 0;
+}
+
+.srm-notice-item.srm-notice-today {
+  background: #fffbeb;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  margin: 8px -8px;
+  padding: 12px 8px 12px 10px;
+}
+
+.srm-notice-today .research-title {
+  color: #92400e;
+}
+
+.today-badge {
+  background: #f59e0b;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  margin-right: 6px;
+  padding: 4px 6px;
+  vertical-align: 2px;
+}
+
+.srm-notice-times {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+  justify-items: end;
+  white-space: nowrap;
+}
+
+.newsroom-card {
+  padding-bottom: 12px;
+}
+
+.newsroom-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.newsroom-item {
+  background: #f8fafc;
+  border: 1px solid var(--soft);
+  border-radius: 12px;
+  color: inherit;
+  display: grid;
+  grid-template-rows: 132px minmax(0, 1fr);
+  overflow: hidden;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.newsroom-item:hover {
+  border-color: rgba(13, 132, 141, 0.42);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+.newsroom-image {
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.newsroom-image img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.newsroom-image-placeholder {
+  align-items: center;
+  color: var(--accent);
+  display: flex;
+  font-size: 13px;
+  font-weight: 900;
+  height: 100%;
+  justify-content: center;
+  letter-spacing: 0.08em;
+}
+
+.newsroom-body {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+}
+
+.newsroom-date {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.newsroom-title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.newsroom-summary {
+  color: var(--muted);
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .amazon-top-list {
@@ -812,7 +1025,9 @@ button:disabled {
 
 @media (max-width: 920px) {
   .summary-grid,
-  .listing-grid {
+  .listing-grid,
+  .srm-notice-groups,
+  .newsroom-grid {
     grid-template-columns: 1fr;
   }
 

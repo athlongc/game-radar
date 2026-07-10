@@ -1,19 +1,16 @@
-import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const publicDir = join(__dirname, "public");
-
-const PORT = Number(process.env.PORT || 5177);
+import { createHash, createHmac } from "node:crypto";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const AMAZON_CACHE_TTL_MS = 60 * 60 * 1000;
 const STEAM_TOP_SELLER_TOP_LIMIT = 100;
 const PUBLIC_DASHBOARD_ID = "heartopia";
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
+const NAVIMOW_NEWSROOM_URL = "https://navimow.com/blogs/newsroom";
+const NAVIMOW_NEWSROOM_ATOM_URL = "https://navimow.com/blogs/newsroom.atom";
 const SAFE_RMB_QUERY_URL = "https://www.safe.gov.cn/AppStructured/hlw/RMBQuery.do";
 const SINA_FX_QUOTE_URL = "https://hq.sinajs.cn/list=fx_susdcnh,fx_seurcnh";
+const SINA_HKD_CNY_QUOTE_URL = "https://hq.sinajs.cn/list=fx_shkdcny";
+const SRM_NOTICE_API_URL = "https://srm2.segway-ninebot.com/api/srmSlcServer/v1/srmBaseNoticeRestful/listByPage";
+const SRM_NOTICE_SOURCE_URL = "https://srm2.segway-ninebot.com/#/login?showBid=1";
 const numberFormatter = new Intl.NumberFormat("zh-CN", {
   maximumFractionDigits: 2,
   minimumFractionDigits: 2
@@ -191,7 +188,7 @@ const dashboards = [
     ],
     researchReports: {
       label: "研报",
-      url: "https://zh-cn.ninebot.com/bin/reportList",
+      url: "https://www.ninebot.com/bin/reportList",
       pageSize: 3,
       sourceUrl: "https://zh-cn.ninebot.com/explore/investor.html",
       bidUrl: "https://srm2.segway-ninebot.com/#/login?showBid=1",
@@ -200,6 +197,14 @@ const dashboards = [
       jdEmotorcycleRankUrl:
         "https://pro.jd.com/mall/active/4JRfHorUDXgL77E9YdNxSCNMKwkJ/index.html?pageNum=1&bbtf=1&queryType=1&rankId=3167646&rankType=10&fromName=ProductdetailPC"
     },
+    srmNotices: {
+      sourceUrl: SRM_NOTICE_SOURCE_URL,
+      pageSize: 3,
+      groups: [
+        { key: "bidding", label: "招标公告", noticeType: "SLC_BIDDING_PUBLIC" },
+        { key: "sourcing", label: "寻源公告", noticeType: "SLC_SOURCING_PUBLIC" }
+      ]
+    },
     exchangeRates: true
   },
   {
@@ -207,6 +212,12 @@ const dashboards = [
     title: "Navimow",
     subtitle: "工具免费榜",
     publisher: "Navimow B.V.",
+    newsroom: {
+      label: "Newsroom",
+      url: NAVIMOW_NEWSROOM_URL,
+      feedUrl: NAVIMOW_NEWSROOM_ATOM_URL,
+      pageSize: 6
+    },
     comparisonApp: {
       label: "Mammotion",
       appId: "1626028673"
@@ -367,23 +378,6 @@ const dashboards = [
 const metricsCache = new Map();
 const amazonCache = new Map();
 
-const contentTypes = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png"
-};
-
-function json(res, status, payload) {
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
-  });
-  res.end(JSON.stringify(payload));
-}
-
 async function fetchJson(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 9000);
@@ -411,6 +405,76 @@ async function postJson(url) {
         "content-type": "application/x-www-form-urlencoded",
         "user-agent": "GameRadar/0.1"
       },
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function md5(value) {
+  return createHash("md5").update(String(value)).digest("hex");
+}
+
+function base64(value) {
+  return Buffer.from(String(value)).toString("base64");
+}
+
+function createSrmHeaders(body = {}) {
+  const srmSecret = process.env.SRM_SECRET || "";
+  if (!srmSecret) {
+    throw new Error("SRM_SECRET is not configured");
+  }
+  const timestamp = Date.now().toString();
+  const timestampChars = timestamp.split("");
+  const secondLastDigit = Number(timestampChars[timestampChars.length - 2] || 0);
+  const sampleLength = (secondLastDigit % 4) + 1;
+  const sampleSum = timestampChars.slice(0, sampleLength).reduce((sum, digit) => sum + Number(digit || 0), 0);
+  const md5Rounds = (sampleSum % 4) + 1;
+  let appsign = timestamp;
+  for (let index = 0; index < md5Rounds; index += 1) {
+    appsign = md5(appsign);
+  }
+
+  const appId = base64("BASE");
+  const signatureKey = createHmac("sha256", `${Buffer.from(appId, "base64").toString()}${srmSecret}`)
+    .update(base64(timestamp))
+    .digest("hex");
+  const signaturePayload = decodeURIComponent(JSON.stringify(body).replace(/%/g, "%25"));
+  const parameterSignature = createHmac("sha256", `${signatureKey}${srmSecret}`).update(signaturePayload).digest("hex");
+
+  return {
+    appsign,
+    timestamp,
+    randomNum: String(Math.random()),
+    certificate: "",
+    AuthorizationCode: "",
+    "SAAF-Language": "CN",
+    appId,
+    "Gateway-Tag": "",
+    parameterSignature
+  };
+}
+
+async function postSrmJson(url, body = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...createSrmHeaders(body),
+        accept: "application/json, text/plain, */*",
+        "content-type": "application/json;charset=UTF-8",
+        origin: "https://srm2.segway-ninebot.com",
+        referer: "https://srm2.segway-ninebot.com/",
+        "user-agent": "Mozilla/5.0 GameRadar/0.1"
+      },
+      body: JSON.stringify(body),
       signal: controller.signal
     });
     if (!response.ok) {
@@ -457,16 +521,28 @@ function parseLegacyAppleFeed(feed) {
   }));
 }
 
-function parseTapTapMetric(html, config) {
-  const jsonLdBlocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi)]
+function flattenJsonLd(value) {
+  if (Array.isArray(value)) return value.flatMap(flattenJsonLd);
+  if (Array.isArray(value?.["@graph"])) return [value, ...value["@graph"].flatMap(flattenJsonLd)];
+  return value ? [value] : [];
+}
+
+function parseJsonLdBlocks(html) {
+  return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+    .filter((match) => /\btype=["']application\/ld\+json["']/i.test(match[1]))
     .map((match) => {
       try {
-        return JSON.parse(match[1]);
+        return JSON.parse(match[2]);
       } catch {
         return null;
       }
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .flatMap(flattenJsonLd);
+}
+
+function parseTapTapMetric(html, config) {
+  const jsonLdBlocks = parseJsonLdBlocks(html);
   const gameData = jsonLdBlocks.find((item) => item?.["@type"] === "VideoGame") || {};
   const downloadCount = Number(gameData?.interactionStatistic?.userInteractionCount ?? NaN);
   const rating = Number(gameData?.aggregateRating?.ratingValue ?? NaN);
@@ -615,6 +691,12 @@ async function getStockQuote(stock) {
     throw new Error(`Stock quote unavailable for ${stock.symbol}`);
   }
 
+  const currency = stock.currency || (stock.code.startsWith("hk") ? "HKD" : "CNY");
+  const marketCapQuoteCurrency = Number(quote[45]) * 100000000;
+  const hkdCnyRate = currency === "HKD" ? await getHkdCnyRate().catch(() => null) : 1;
+  const marketCapCny =
+    Number.isFinite(marketCapQuoteCurrency) && Number.isFinite(hkdCnyRate) ? marketCapQuoteCurrency * hkdCnyRate : null;
+
   return {
     ...stock,
     name: quote[1] || stock.label,
@@ -627,11 +709,33 @@ async function getStockQuote(stock) {
     changePercent: Number(quote[32]),
     high: Number(quote[33]),
     low: Number(quote[34]),
-    currency: stock.currency || (stock.code.startsWith("hk") ? "HKD" : "CNY"),
+    currency,
+    marketCapQuoteCurrency: Number.isFinite(marketCapQuoteCurrency) ? marketCapQuoteCurrency : null,
+    marketCapCny,
+    marketCapFxRate: currency === "HKD" ? hkdCnyRate : 1,
+    marketCapCurrency: "CNY",
     quoteTime: normalizeStockQuoteTime(quote[30] || ""),
     delayed: true,
     source: "Tencent Finance"
   };
+}
+
+function parseSinaHkdCnyRate(text = "") {
+  const fields = (text.match(/var hq_str_fx_shkdcny="([^"]*)";/) || [])[1]?.split(",") || [];
+  const value = Number(fields[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+async function getHkdCnyRate() {
+  const text = await fetchText(SINA_HKD_CNY_QUOTE_URL, {
+    referer: "https://finance.sina.com.cn",
+    "user-agent": "GameRadar/0.1"
+  });
+  const rate = parseSinaHkdCnyRate(text);
+  if (!Number.isFinite(rate)) {
+    throw new Error("HKD/CNY quote unavailable");
+  }
+  return rate;
 }
 
 function normalizeStockQuoteTime(value) {
@@ -856,6 +960,29 @@ function decodeHtml(value = "") {
     .trim();
 }
 
+function decodeXml(value = "") {
+  return value
+    .replace(/&quot;/g, "\"")
+    .replace(/&#34;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
+function absoluteUrl(baseUrl, path = "") {
+  if (!path) return "";
+  if (path.startsWith("//")) return `https:${path}`;
+  try {
+    return new URL(path, baseUrl).toString();
+  } catch {
+    return path;
+  }
+}
+
 function absoluteAmazonUrl(baseUrl, path = "") {
   try {
     return new URL(path, baseUrl).toString();
@@ -983,6 +1110,204 @@ async function getResearchReports(config = {}) {
   };
 }
 
+function extractXmlText(block = "", tagName = "") {
+  const match = block.match(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
+  return decodeXml((match || [])[1] || "");
+}
+
+function extractAtomAlternateUrl(block = "", baseUrl = "") {
+  const match = block.match(/<link\b[^>]*rel=["']alternate["'][^>]*href=["']([^"']+)["']/i);
+  return absoluteUrl(baseUrl, decodeXml((match || [])[1] || ""));
+}
+
+function extractAtomContentHtml(block = "") {
+  const match = block.match(/<content\b[^>]*>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/content>/i);
+  return ((match || [])[1] || "").trim();
+}
+
+function extractFirstImageUrl(html = "", baseUrl = "") {
+  const match = html.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
+  return absoluteUrl(baseUrl, decodeXml((match || [])[1] || ""));
+}
+
+function stripHtml(value = "") {
+  return decodeHtml(value);
+}
+
+function parseNavimowNewsroomAtom(xml = "", config = {}) {
+  const pageSize = config.pageSize || 6;
+  return [...xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/gi)]
+    .slice(0, pageSize)
+    .map((match) => {
+      const block = match[1] || "";
+      const contentHtml = extractAtomContentHtml(block);
+      const summary = stripHtml(contentHtml).slice(0, 180);
+      const publishedAt = extractXmlText(block, "published");
+      return {
+        id: extractXmlText(block, "id") || extractAtomAlternateUrl(block, config.url),
+        title: extractXmlText(block, "title") || "Untitled",
+        url: extractAtomAlternateUrl(block, config.url),
+        publishedAt,
+        publishDate: publishedAt ? publishedAt.slice(0, 10) : "",
+        author: extractXmlText(block, "name"),
+        imageUrl: extractFirstImageUrl(contentHtml, config.url),
+        summary
+      };
+    })
+    .filter((item) => item.url && item.title);
+}
+
+function parseNavimowNewsroomHtmlCards(html = "", config = {}) {
+  return [...html.matchAll(/<div class="card article-card[\s\S]*?(?=<div class="card article-card|<\/motion-list>)/gi)].map((match) => {
+    const block = match[0] || "";
+    const url = absoluteUrl(
+      config.url || NAVIMOW_NEWSROOM_URL,
+      decodeXml((block.match(/<a\b(?=[^>]*\barticle-card__link\b)[^>]*\bhref=["']([^"']+)["']/i) || [])[1] || "")
+    );
+    const imageUrl = absoluteUrl(config.url || NAVIMOW_NEWSROOM_URL, decodeXml((block.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i) || [])[1] || ""));
+    const summary = stripHtml((block.match(/<div class="article-card__bottom[^"]*"[^>]*>([\s\S]*?)<\/div>/i) || [])[1] || "");
+    return { url, imageUrl, summary };
+  }).filter((item) => item.url);
+}
+
+async function getNavimowNewsroom(config = {}) {
+  const feedUrl = config.feedUrl || NAVIMOW_NEWSROOM_ATOM_URL;
+  const [xml, html] = await Promise.all([
+    fetchText(feedUrl, {
+      accept: "application/atom+xml, application/xml, text/xml, */*"
+    }),
+    fetchText(config.url || NAVIMOW_NEWSROOM_URL).catch(() => "")
+  ]);
+  const cardByUrl = new Map(parseNavimowNewsroomHtmlCards(html, config).map((item) => [item.url, item]));
+  const items = parseNavimowNewsroomAtom(xml, config).map((item) => {
+    const card = cardByUrl.get(item.url) || {};
+    return {
+      ...item,
+      imageUrl: item.imageUrl || card.imageUrl || "",
+      summary: item.summary || card.summary || ""
+    };
+  });
+  return {
+    label: config.label || "Newsroom",
+    sourceUrl: config.url || NAVIMOW_NEWSROOM_URL,
+    items,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function getSrmNoticeUrl(noticeId) {
+  if (!noticeId) return SRM_NOTICE_SOURCE_URL;
+  const url = new URL("https://srm2.segway-ninebot.com/");
+  url.hash = `/pubNotice?id=${encodeURIComponent(noticeId)}&noticeGroup=OPEN&loginStatus=N&menuId=-9999`;
+  return url.toString();
+}
+
+function normalizeSrmNotice(item = {}, group = {}) {
+  return {
+    id: item.noticeId || item.noticeCode || "",
+    code: item.noticeCode || "",
+    title: item.noticeTitle || "",
+    publishDate: item.noticeDate || (item.creationDate || "").slice(0, 10),
+    deadlineTime: item.deadlineTime || "",
+    organizationName: item.biddingOuName || item.sourcingOuName || "",
+    categoryName: item.biddingCategoryName || item.sourcingCategoryName || "",
+    noticeType: item.noticeType || group.noticeType || "",
+    groupKey: group.key || "",
+    url: getSrmNoticeUrl(item.noticeId)
+  };
+}
+
+function getSrmPublishDate(item = {}) {
+  return String(item.noticeDate || (item.creationDate || "").slice(0, 10)).slice(0, 10);
+}
+
+function getChinaDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  })
+    .formatToParts(date)
+    .reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function selectSrmNoticeItems(rows = [], group = {}, pageSize = 3) {
+  const items = rows.map((item) => normalizeSrmNotice(item, group));
+  const todayKey = getChinaDateKey();
+  const todayItems = items.filter((item) => item.publishDate === todayKey);
+  if (todayItems.length > pageSize) {
+    return {
+      items: todayItems,
+      displayLabel: `今日全部 ${todayItems.length} 条`
+    };
+  }
+  return {
+    items: items.slice(0, pageSize),
+    displayLabel: `前三条`
+  };
+}
+
+async function getSrmNoticeGroup(group = {}, pageSize = 3, lookbackPageSize = 50) {
+  const requestRows = Math.max(pageSize, lookbackPageSize);
+  const body = {
+    categoryCode: "",
+    ouCode: "",
+    pageIndex: 1,
+    pageRows: requestRows,
+    fromNoticeFlag: "Y",
+    noticeTitle: "",
+    noticeType: group.noticeType,
+    deadlineFlag: "Y",
+    puName: "",
+    categoryName: ""
+  };
+  const data = await postSrmJson(SRM_NOTICE_API_URL, body);
+  if (data?.code !== "200" || !Array.isArray(data.data)) {
+    throw new Error(data?.msg || `${group.label || "SRM 公告"} unavailable`);
+  }
+  let rows = data.data;
+  let total = data.count || data.page?.count || data.data.length || 0;
+  const todayKey = getChinaDateKey();
+  if (total > rows.length && rows.length && getSrmPublishDate(rows[rows.length - 1]) === todayKey) {
+    const expandedData = await postSrmJson(SRM_NOTICE_API_URL, { ...body, pageRows: total });
+    if (expandedData?.code === "200" && Array.isArray(expandedData.data)) {
+      rows = expandedData.data;
+      total = expandedData.count || expandedData.page?.count || expandedData.data.length || total;
+    }
+  }
+  const selected = selectSrmNoticeItems(rows, group, pageSize);
+  return {
+    ...group,
+    ...selected,
+    total
+  };
+}
+
+async function getSrmNotices(config = {}) {
+  const pageSize = config.pageSize || 3;
+  const lookbackPageSize = config.lookbackPageSize || 50;
+  const groups = config.groups || [];
+  const results = await Promise.all(
+    groups.map((group) =>
+      getSrmNoticeGroup(group, pageSize, lookbackPageSize).catch((error) => ({
+        ...group,
+        items: [],
+        displayLabel: `前三条`,
+        total: 0,
+        error: error.message || `${group.label || "SRM 公告"} unavailable`
+      }))
+    )
+  );
+  return {
+    label: config.label || "SRM 公告",
+    sourceUrl: config.sourceUrl || SRM_NOTICE_SOURCE_URL,
+    groups: results,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 async function getAmazonBestseller(monitor, brandPatterns = [], force = false) {
   const cached = amazonCache.get(monitor.url);
   if (!force && cached && Date.now() - cached.cachedAt < AMAZON_CACHE_TTL_MS) {
@@ -1080,7 +1405,38 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
             error: error.message || "Research reports unavailable"
           }))
         : null;
-      return { ...dashboard, steam, steamReviews, steamTopSellers, stockQuote, tapTap, exchangeRates, apple, amazon, researchReports };
+      const srmNotices = dashboard.srmNotices
+        ? await getSrmNotices(dashboard.srmNotices).catch((error) => ({
+            label: dashboard.srmNotices.label || "SRM 公告",
+            sourceUrl: dashboard.srmNotices.sourceUrl || SRM_NOTICE_SOURCE_URL,
+            groups: [],
+            updatedAt: new Date().toISOString(),
+            error: error.message || "SRM notices unavailable"
+          }))
+        : null;
+      const newsroom = dashboard.newsroom
+        ? await getNavimowNewsroom(dashboard.newsroom).catch((error) => ({
+            label: dashboard.newsroom.label || "Newsroom",
+            sourceUrl: dashboard.newsroom.url || NAVIMOW_NEWSROOM_URL,
+            items: [],
+            updatedAt: new Date().toISOString(),
+            error: error.message || "Navimow newsroom unavailable"
+          }))
+        : null;
+      return {
+        ...dashboard,
+        steam,
+        steamReviews,
+        steamTopSellers,
+        stockQuote,
+        tapTap,
+        exchangeRates,
+        apple,
+        amazon,
+        researchReports,
+        srmNotices,
+        newsroom
+      };
     })
   );
 
@@ -1126,7 +1482,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
   return payload;
 }
 
-async function getMetrics({ force = false, dashboardId = null } = {}) {
+export async function getMetrics({ force = false, dashboardId = null } = {}) {
   const selectedDashboards = dashboardId ? dashboards.filter((dashboard) => dashboard.id === dashboardId) : dashboards;
   const cacheKey = dashboardId || "all";
   const cached = metricsCache.get(cacheKey);
@@ -1137,54 +1493,3 @@ async function getMetrics({ force = false, dashboardId = null } = {}) {
   metricsCache.set(cacheKey, { cachedAt: Date.now(), data });
   return { ...data, cached: false };
 }
-
-function isLocalRequest(req) {
-  const rawHost = req.headers.host || "";
-  const host = rawHost.startsWith("[") ? rawHost.slice(1, rawHost.indexOf("]")) : rawHost.split(":")[0];
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
-}
-
-async function serveStatic(req, res) {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const requestPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
-  const filePath = normalize(join(publicDir, requestPath));
-  if (!filePath.startsWith(publicDir)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
-  }
-
-  try {
-    const body = await readFile(filePath);
-    const type = contentTypes[extname(filePath)] || "application/octet-stream";
-    res.writeHead(200, { "content-type": type });
-    res.end(body);
-  } catch {
-    res.writeHead(404);
-    res.end("Not found");
-  }
-}
-
-createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    if (url.pathname === "/api/metrics") {
-      const local = isLocalRequest(req);
-      const requestedDashboardId = url.searchParams.get("dashboard") || "";
-      const dashboardId = local ? requestedDashboardId || null : PUBLIC_DASHBOARD_ID;
-      const force =
-        url.searchParams.get("force") === "1" && (local || dashboardId === PUBLIC_DASHBOARD_ID);
-      json(res, 200, await getMetrics({ force, dashboardId }));
-      return;
-    }
-    if (url.pathname === "/api/health") {
-      json(res, 200, { ok: true });
-      return;
-    }
-    await serveStatic(req, res);
-  } catch (error) {
-    json(res, 500, { error: error.message || "Unknown error" });
-  }
-}).listen(PORT, "0.0.0.0", () => {
-  console.log(`Game Radar running on port ${PORT}`);
-});
