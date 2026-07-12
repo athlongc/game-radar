@@ -25,15 +25,32 @@ const IOS_FREE_RANK_GROUP_LABELS = {
   kr: "韩国",
   th: "泰国"
 };
+const COUNTRY_LABELS = {
+  cn: "中国",
+  tw: "台湾",
+  kr: "韩国",
+  th: "泰国",
+  jp: "日本",
+  us: "美国",
+  fr: "法国",
+  br: "巴西"
+};
 
 let currentMetrics = null;
 
+function isLocalHost() {
+  return location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "::1";
+}
+
 function canForceRefresh() {
-  return Boolean(currentMetrics?.dashboards?.length);
+  return isLocalHost() || currentMetrics?.dashboards?.[0]?.id === PUBLIC_DASHBOARD_ID;
 }
 
 function getMetricsUrl(force = false) {
   const params = new URLSearchParams();
+  if (!isLocalHost()) {
+    params.set("dashboard", PUBLIC_DASHBOARD_ID);
+  }
   if (force && canForceRefresh()) {
     params.set("force", "1");
   }
@@ -73,6 +90,15 @@ function escapeHtml(value = "") {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function safeExternalUrl(value = "") {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === "http:" || url.protocol === "https:" ? escapeHtml(url.href) : "";
+  } catch {
+    return "";
+  }
 }
 
 function getLocalDateKey(date = new Date()) {
@@ -240,7 +266,184 @@ function buildIosFreeRankGroupCard(dashboard) {
   };
 }
 
+function renderOverviewCard({ className = "", url = "", body = "" }) {
+  const safeUrl = safeExternalUrl(url);
+  const classes = ["overview-kpi-card", className, safeUrl ? "overview-kpi-link" : ""].filter(Boolean).join(" ");
+  if (safeUrl) {
+    return `<a class="${classes}" href="${safeUrl}" target="_blank" rel="noreferrer">${body}</a>`;
+  }
+  return `<article class="${classes}">${body}</article>`;
+}
+
+function renderMatrixValue(value, url = "", className = "") {
+  const safeUrl = safeExternalUrl(url);
+  const content = `<span class="region-rank-value ${className}">${escapeHtml(value)}</span>`;
+  return safeUrl
+    ? `<a class="region-rank-link" href="${safeUrl}" target="_blank" rel="noreferrer">${content}</a>`
+    : content;
+}
+
+function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
+  const freeRank = listing.ranks?.find((rank) => rank.key === "freeGames") || null;
+  const grossingRank = listing.ranks?.find((rank) => rank.key === "grossingGames") || null;
+  const steamRank = getSteamTopSeller(dashboard, listing.country);
+  const freeRankUrl = listing.country === "cn" ? freeRank?.externalUrl || "" : sharedIosRankUrl;
+  const grossingRankUrl = listing.country === "cn" ? grossingRank?.externalUrl || "" : sharedIosRankUrl;
+  const hasError = Boolean(
+    listing.lookup?.error || freeRank?.error || grossingRank?.error || steamRank?.error
+  );
+  const freeValue = freeRank ? (freeRank.error ? "暂无" : formatRank(freeRank.rank, freeRank.topLimit)) : "—";
+  const grossingValue = grossingRank
+    ? grossingRank.error
+      ? "暂无"
+      : formatRank(grossingRank.rank, grossingRank.topLimit)
+    : "—";
+  const steamValue = steamRank
+    ? steamRank.error
+      ? "暂无"
+      : formatSteamTopSellerRank(steamRank)
+    : "—";
+  const countryLabel = COUNTRY_LABELS[listing.country] || listing.label.replace(/\s*iOS$/i, "");
+
+  return `
+    <tr>
+      <th scope="row">
+        <span class="region-country">${escapeHtml(countryLabel)}</span>
+        <span class="region-code">${escapeHtml(listing.country.toUpperCase())}</span>
+      </th>
+      <td data-label="iOS 免费游戏榜">
+        ${renderMatrixValue(freeValue, freeRankUrl, freeValue === "—" ? "region-rank-empty" : "")}
+      </td>
+      <td data-label="iOS 畅销游戏榜">
+        ${renderMatrixValue(grossingValue, grossingRankUrl, grossingValue === "—" ? "region-rank-empty" : "")}
+      </td>
+      <td data-label="Steam 畅销榜">
+        <span class="steam-market-code">${steamRank ? `Steam ${escapeHtml(steamRank.displayCode || listing.country.toUpperCase())}` : "Steam"}</span>
+        ${renderMatrixValue(steamValue, steamRank?.url || "", steamValue === "—" ? "region-rank-empty" : "region-rank-steam")}
+      </td>
+      <td class="region-status-cell" data-label="状态">
+        <span class="region-status ${hasError ? "has-error" : ""}">
+          <span class="region-status-dot" aria-hidden="true"></span>
+          ${hasError ? "部分异常" : "监控中"}
+        </span>
+      </td>
+    </tr>
+  `;
+}
+
+function renderHeartopiaSummary(dashboard) {
+  const stock = dashboard.stockQuote || {};
+  const tapTap = dashboard.tapTap || {};
+  const globalSteam = getSteamTopSeller(dashboard, "global");
+  const stockClass = stock.change > 0 ? "up" : stock.change < 0 ? "down" : "";
+  const preferredCountryOrder = ["cn", "tw", "kr", "th", "jp", "us", "fr", "br"];
+  const listings = preferredCountryOrder
+    .map((country) => (dashboard.apple || []).find((listing) => listing.country === country))
+    .filter(Boolean);
+  const japanListing = listings.find((listing) => listing.country === "jp");
+  const sharedIosRankUrl = japanListing?.ranks?.find((rank) => rank.key === "grossingGames")?.externalUrl || "";
+
+  const steamCard = renderOverviewCard({
+    className: "overview-steam-card",
+    url: dashboard.steamExternalUrl || "",
+    body: `
+      <div class="overview-steam-primary">
+        <div>
+          <div class="metric-label">Steam 当前在线</div>
+          <div class="overview-value">${formatNumber(dashboard.steam?.currentPlayers)}</div>
+          <div class="metric-note">AppID ${escapeHtml(dashboard.steam?.appId || "-")}</div>
+        </div>
+        <div>
+          <div class="metric-label">Steam 好评率</div>
+          <div class="overview-value">${dashboard.steamReviews?.positiveRate == null ? "暂无" : `${dashboard.steamReviews.positiveRate}%`}</div>
+          <div class="metric-note">${escapeHtml(dashboard.steamReviews?.reviewScoreDesc || "评价")} · ${formatNumber(dashboard.steamReviews?.totalReviews)} 条</div>
+        </div>
+      </div>
+      <div class="overview-steam-global">
+        <div>
+          <strong>Steam 全球畅销</strong>
+          <span>${escapeHtml(globalSteam?.displayCode || "Global")}</span>
+        </div>
+        <b>${escapeHtml(formatSteamTopSellerRank(globalSteam))}</b>
+      </div>
+    `
+  });
+
+  const stockCard = renderOverviewCard({
+    className: "overview-stock-card",
+    url: stock.externalUrl || "",
+    body: `
+      <div class="metric-label">${escapeHtml(stock.label || stock.symbol || "公司股价")}</div>
+      ${
+        stock.error
+          ? `<div class="overview-value outside">暂无</div><div class="metric-note">${escapeHtml(stock.error)}</div>`
+          : `<div class="overview-value">${escapeHtml(stock.currency || "HKD")} ${formatPrice(stock.price)}</div>
+             <div class="overview-change ${stockClass}">${formatChange(stock.change)} / ${formatPercent(stock.changePercent)}</div>
+             <div class="overview-market-cap">市值 人民币 ${formatMarketCapCny(stock.marketCapCny)}</div>
+             <div class="metric-note">延迟行情 · ${escapeHtml(stock.quoteTime || "未知时间")} · 量 ${compactNumberFormatter.format(stock.volume || 0)}</div>`
+      }
+    `
+  });
+
+  const tapTapCard = renderOverviewCard({
+    className: "overview-taptap-card",
+    url: tapTap.url || "",
+    body: `
+      <div class="metric-label">${escapeHtml(tapTap.label || "TapTap")}</div>
+      ${
+        tapTap.error
+          ? `<div class="overview-value outside">暂无</div><div class="metric-note">${escapeHtml(tapTap.error)}</div>`
+          : `<div class="overview-taptap-grid">
+              <div><b>${formatWan(tapTap.downloadCount)}</b><span>总下载量</span></div>
+              <div><b>${tapTap.rating == null ? "暂无" : escapeHtml(tapTap.rating)}</b><span>${tapTap.ratingCount == null ? "评分" : `${formatWan(tapTap.ratingCount)}评分`}</span></div>
+              <div><b>${escapeHtml(tapTap.downloadRank || "暂无")}</b><span>热门下载榜</span></div>
+            </div>`
+      }
+    `
+  });
+
+  return `
+    <div class="overview-kpi-grid">
+      ${steamCard}
+      ${stockCard}
+      ${tapTapCard}
+    </div>
+    <section class="region-matrix-panel" aria-labelledby="regionMatrixTitle">
+      <div class="region-matrix-heading">
+        <div>
+          <p class="section-kicker">Market comparison</p>
+          <h2 id="regionMatrixTitle">地区榜单对比</h2>
+        </div>
+        <span>iOS 与 Steam 当前排名</span>
+      </div>
+      <div class="region-matrix-scroll">
+        <table class="region-matrix-table">
+          <caption>心动小镇各地区 iOS 与 Steam 排名对比</caption>
+          <thead>
+            <tr>
+              <th scope="col">地区</th>
+              <th scope="col">iOS 免费游戏榜</th>
+              <th scope="col">iOS 畅销游戏榜</th>
+              <th scope="col">Steam 畅销榜</th>
+              <th scope="col">状态</th>
+            </tr>
+          </thead>
+          <tbody>${listings.map((listing) => renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl)).join("")}</tbody>
+        </table>
+      </div>
+      <p class="region-matrix-note">榜单仅显示 Top 100，“&gt;100”表示未进入 Top 100。点击排名可查看可用的数据源。</p>
+    </section>
+  `;
+}
+
 function renderSummary(dashboard) {
+  const isHeartopia = dashboard.id === PUBLIC_DASHBOARD_ID;
+  summaryEl.classList.toggle("heartopia-summary", isHeartopia);
+  if (isHeartopia) {
+    summaryEl.innerHTML = renderHeartopiaSummary(dashboard);
+    return;
+  }
+
   const iosFreeRankGroupCard = buildIosFreeRankGroupCard(dashboard);
   const rankCards = (dashboard.apple || []).flatMap((listing) =>
     listing.ranks
@@ -592,7 +795,7 @@ function renderMonitorList(dashboard) {
     return;
   }
 
-  monitorListEl.innerHTML = `
+  const gameCardHtml = `
     <article class="game-card">
       <div class="game-head">
         <div>
@@ -619,6 +822,16 @@ function renderMonitorList(dashboard) {
       </div>
     </article>
   `;
+  monitorListEl.innerHTML =
+    dashboard.id === PUBLIC_DASHBOARD_ID
+      ? `<details class="detail-disclosure">
+          <summary>
+            <span>各地区应用详情与 Top 5</span>
+            <small>${dashboard.apple.length} 个地区</small>
+          </summary>
+          ${gameCardHtml}
+        </details>`
+      : gameCardHtml;
 }
 
 function renderNewsroomMonitorList(dashboard) {
@@ -886,13 +1099,15 @@ function renderAmazonItem(item) {
 
 function renderAppleListing(listing) {
   const lookup = listing.lookup;
+  const artworkUrl = safeExternalUrl(lookup.artworkUrl100);
+  const storeUrl = safeExternalUrl(lookup.storeUrl);
   return `
     <section class="listing">
       <div class="listing-top">
-        ${lookup.artworkUrl100 ? `<img src="${lookup.artworkUrl100}" alt="" />` : `<div class="app-icon-placeholder"></div>`}
+        ${artworkUrl ? `<img src="${artworkUrl}" alt="" />` : `<div class="app-icon-placeholder"></div>`}
         <div>
-          <div class="listing-title">${lookup.name || listing.label}</div>
-          <div class="listing-subtitle">${listing.label} · ${lookup.sellerName || "未知发行方"}</div>
+          <div class="listing-title">${escapeHtml(lookup.name || listing.label)}</div>
+          <div class="listing-subtitle">${escapeHtml(listing.label)} · ${escapeHtml(lookup.sellerName || "未知发行方")}</div>
         </div>
       </div>
       <div class="rank-row">
@@ -901,9 +1116,9 @@ function renderAppleListing(listing) {
       <div class="meta-line">
         <span>评分 ${lookup.rating ? lookup.rating.toFixed(2) : "暂无"}</span>
         <span>${formatNumber(lookup.ratingCount)} 个评分</span>
-        <span>版本 ${lookup.version || "未知"}</span>
+        <span>版本 ${escapeHtml(lookup.version || "未知")}</span>
         <span>更新 ${formatTime(lookup.updatedAt)}</span>
-        <a href="${lookup.storeUrl}" target="_blank" rel="noreferrer">App Store</a>
+        ${storeUrl ? `<a href="${storeUrl}" target="_blank" rel="noreferrer">App Store</a>` : ""}
       </div>
       ${listing.ranks.map(renderLeaderList).join("")}
     </section>
@@ -914,7 +1129,7 @@ function renderRankBox(chartRank) {
   const outside = !chartRank.rank;
   return `
     <div class="rank-box">
-      <div class="rank-label">${chartRank.label}</div>
+      <div class="rank-label">${escapeHtml(chartRank.label)}</div>
       <div class="rank-value ${outside ? "outside" : ""}">
         ${formatRank(chartRank.rank, chartRank.topLimit)}
       </div>
@@ -925,9 +1140,9 @@ function renderRankBox(chartRank) {
 function renderLeaderList(chartRank) {
   return `
     <div class="leader-list">
-      <strong>${chartRank.label} Top 5</strong>
+      <strong>${escapeHtml(chartRank.label)} Top 5</strong>
       <ol>
-        ${chartRank.leaders.map((item) => `<li>${item.name}</li>`).join("")}
+        ${chartRank.leaders.map((item) => `<li>${escapeHtml(item.name)}</li>`).join("")}
       </ol>
     </div>
   `;

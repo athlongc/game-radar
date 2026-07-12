@@ -1,13 +1,15 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { getMetrics } from "./server.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
+const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 5177);
+const PUBLIC_DASHBOARD_ID = "heartopia";
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -27,11 +29,17 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function isLocalRequest(req) {
+  const rawHost = req.headers.host || "";
+  const host = rawHost.startsWith("[") ? rawHost.slice(1, rawHost.indexOf("]")) : rawHost.split(":")[0];
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const requestPath = url.pathname === "/" ? "/local-index.html" : decodeURIComponent(url.pathname);
-  const filePath = normalize(join(publicDir, requestPath));
-  if (!filePath.startsWith(publicDir)) {
+  const filePath = resolve(publicDir, `.${requestPath}`);
+  if (filePath !== publicDir && !filePath.startsWith(`${publicDir}${sep}`)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -52,8 +60,10 @@ createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname === "/api/metrics") {
-      const dashboardId = url.searchParams.get("dashboard") || null;
-      const force = url.searchParams.get("force") === "1";
+      const local = isLocalRequest(req);
+      const requestedDashboardId = url.searchParams.get("dashboard") || "";
+      const dashboardId = local ? requestedDashboardId || null : PUBLIC_DASHBOARD_ID;
+      const force = url.searchParams.get("force") === "1" && (local || dashboardId === PUBLIC_DASHBOARD_ID);
       json(res, 200, await getMetrics({ force, dashboardId }));
       return;
     }
@@ -63,8 +73,9 @@ createServer(async (req, res) => {
     }
     await serveStatic(req, res);
   } catch (error) {
-    json(res, 500, { error: error.message || "Unknown error" });
+    const status = error instanceof RangeError ? 400 : 500;
+    json(res, status, { error: error.message || "Unknown error" });
   }
-}).listen(PORT, "0.0.0.0", () => {
-  console.log(`Game Radar running on port ${PORT}`);
+}).listen(PORT, HOST, () => {
+  console.log(`Game Radar running at http://${HOST}:${PORT}`);
 });

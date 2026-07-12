@@ -93,6 +93,12 @@ const dashboards = [
         appId: "6746151928",
         charts: [
           {
+            key: "freeGames",
+            label: "日区免费游戏榜",
+            feed: "topfreeapplications",
+            genre: "6014"
+          },
+          {
             key: "grossingGames",
             label: "日区畅销游戏榜",
             feed: "topgrossingapplications",
@@ -123,19 +129,28 @@ const dashboards = [
         country: "us",
         label: "美区 iOS",
         appId: "6746151928",
-        charts: [{ key: "grossingGames", label: "美区畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }]
+        charts: [
+          { key: "freeGames", label: "美区免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          { key: "grossingGames", label: "美区畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
+        ]
       },
       {
         country: "fr",
         label: "法国 iOS",
         appId: "6746151928",
-        charts: [{ key: "grossingGames", label: "法国畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }]
+        charts: [
+          { key: "freeGames", label: "法国免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          { key: "grossingGames", label: "法国畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
+        ]
       },
       {
         country: "br",
         label: "巴西 iOS",
         appId: "6746151928",
-        charts: [{ key: "grossingGames", label: "巴西畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }]
+        charts: [
+          { key: "freeGames", label: "巴西免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          { key: "grossingGames", label: "巴西畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
+        ]
       }
     ]
   },
@@ -1482,8 +1497,14 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
   return payload;
 }
 
+/**
+ * @param {{ force?: boolean, dashboardId?: string | null }} [options]
+ */
 export async function getMetrics({ force = false, dashboardId = null } = {}) {
   const selectedDashboards = dashboardId ? dashboards.filter((dashboard) => dashboard.id === dashboardId) : dashboards;
+  if (dashboardId && selectedDashboards.length === 0) {
+    throw new RangeError(`Unknown dashboard: ${dashboardId}`);
+  }
   const cacheKey = dashboardId || "all";
   const cached = metricsCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
