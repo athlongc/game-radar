@@ -7,8 +7,8 @@ import { getMetrics } from "./server.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
-const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 5177);
+const HOST = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const PUBLIC_DASHBOARD_ID = "heartopia";
 
 const contentTypes = {
