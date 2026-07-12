@@ -311,11 +311,11 @@ function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
         <span class="region-country">${escapeHtml(countryLabel)}</span>
         <span class="region-code">${escapeHtml(listing.country.toUpperCase())}</span>
       </th>
-      <td data-label="iOS 免费游戏榜">
-        ${renderMatrixValue(freeValue, freeRankUrl, freeValue === "—" ? "region-rank-empty" : "")}
-      </td>
       <td data-label="iOS 畅销游戏榜">
         ${renderMatrixValue(grossingValue, grossingRankUrl, grossingValue === "—" ? "region-rank-empty" : "")}
+      </td>
+      <td data-label="iOS 免费游戏榜">
+        ${renderMatrixValue(freeValue, freeRankUrl, freeValue === "—" ? "region-rank-empty" : "")}
       </td>
       <td data-label="Steam 畅销榜">
         <span class="steam-market-code">${steamRank ? `Steam ${escapeHtml(steamRank.displayCode || listing.country.toUpperCase())}` : "Steam"}</span>
@@ -422,8 +422,8 @@ function renderHeartopiaSummary(dashboard) {
           <thead>
             <tr>
               <th scope="col">地区</th>
-              <th scope="col">iOS 免费游戏榜</th>
               <th scope="col">iOS 畅销游戏榜</th>
+              <th scope="col">iOS 免费游戏榜</th>
               <th scope="col">Steam 畅销榜</th>
               <th scope="col">状态</th>
             </tr>
