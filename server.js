@@ -202,7 +202,7 @@ const dashboards = [
     subtitle: "Steam 在线与 iOS 游戏榜",
     publisher: "XD",
     layout: "regionalGameComparison",
-    regionCountryOrder: ["cn", "tw", "kr", "jp", "ru", "sg"],
+    regionCountryOrder: ["cn", "tw", "kr", "jp", "ru", "sg", "us"],
     featuredFreeRankKey: "freeActionGames",
     featuredFreeRankLabel: "iOS 免费动作游戏榜",
     steamEditionLabel: "Steam 国际服",
@@ -225,7 +225,8 @@ const dashboards = [
       { country: "kr", label: "韩区畅销", displayCode: "KR", url: "https://store.steampowered.com/charts/topselling/KR" },
       { country: "jp", label: "日区畅销", displayCode: "JP", url: "https://store.steampowered.com/charts/topselling/JP" },
       { country: "ru", label: "俄区畅销", displayCode: "RU", url: "https://store.steampowered.com/charts/topselling/RU" },
-      { country: "sg", label: "新加坡畅销", displayCode: "SG", url: "https://store.steampowered.com/charts/topselling/SG" }
+      { country: "sg", label: "新加坡畅销", displayCode: "SG", url: "https://store.steampowered.com/charts/topselling/SG" },
+      { country: "us", label: "美区畅销", displayCode: "US", url: "https://store.steampowered.com/charts/topselling/US" }
     ],
     tapTap: {
       label: "TapTap",
@@ -253,7 +254,8 @@ const dashboards = [
         ["kr", "韩国", "韩区"],
         ["jp", "日本", "日区"],
         ["ru", "俄罗斯", "俄区"],
-        ["sg", "新加坡", "新加坡"]
+        ["sg", "新加坡", "新加坡"],
+        ["us", "美国", "美区"]
       ].map(([country, countryLabel, regionLabel]) => ({
         country,
         label: `${countryLabel} iOS`,
