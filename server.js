@@ -613,10 +613,34 @@ async function getSteamMetric(appId) {
   };
 }
 
+function parseSteamRecentReviewMetric(html = "") {
+  const match = html.match(
+    /data-tooltip-html="(\d+)% of the ([\d,]+) user reviews in the last 30 days are positive\."/i
+  );
+  if (!match) {
+    return {
+      recentPositiveRate: null,
+      recentTotalReviews: null
+    };
+  }
+  return {
+    recentPositiveRate: Number(match[1]),
+    recentTotalReviews: Number(match[2].replace(/,/g, ""))
+  };
+}
+
 async function getSteamReviewMetric(appId) {
   const url = `https://store.steampowered.com/appreviews/${appId}?json=1&language=all&purchase_type=all&filter=summary&num_per_page=0`;
-  const data = await fetchJson(url);
+  const storeUrl = `https://store.steampowered.com/app/${appId}/?l=english&cc=us`;
+  const [data, storeHtml] = await Promise.all([
+    fetchJson(url),
+    fetchText(storeUrl, {
+      "accept-language": "en-US,en;q=0.9",
+      "user-agent": "GameRadar/0.1"
+    }).catch(() => "")
+  ]);
   const summary = data?.query_summary || {};
+  const recent = parseSteamRecentReviewMetric(storeHtml);
   const totalPositive = summary.total_positive ?? null;
   const totalReviews = summary.total_reviews ?? null;
   const positiveRate =
@@ -629,7 +653,8 @@ async function getSteamReviewMetric(appId) {
     reviewScoreDesc: summary.review_score_desc || "",
     totalPositive,
     totalNegative: summary.total_negative ?? null,
-    totalReviews
+    totalReviews,
+    ...recent
   };
 }
 

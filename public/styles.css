@@ -213,7 +213,7 @@ button:disabled {
 .overview-steam-primary {
   display: grid;
   gap: 20px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .overview-steam-global {
@@ -1424,6 +1424,10 @@ button:disabled {
 
   .overview-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview-steam-card {
+    grid-column: 1 / -1;
   }
 
   .overview-taptap-card {
