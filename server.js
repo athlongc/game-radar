@@ -3,6 +3,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const AMAZON_CACHE_TTL_MS = 60 * 60 * 1000;
 const STEAM_TOP_SELLER_TOP_LIMIT = 100;
 const PUBLIC_DASHBOARD_ID = "heartopia";
+const APPLE_SIMULATION_GENRE_ID = "7015";
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
 const NAVIMOW_NEWSROOM_URL = "https://navimow.com/blogs/newsroom";
 const NAVIMOW_NEWSROOM_ATOM_URL = "https://navimow.com/blogs/newsroom.atom";
@@ -15,6 +16,16 @@ const numberFormatter = new Intl.NumberFormat("zh-CN", {
   maximumFractionDigits: 2,
   minimumFractionDigits: 2
 });
+
+function createFreeSimulationChart(country, regionLabel) {
+  return {
+    key: "freeSimulationGames",
+    label: `${regionLabel}免费模拟游戏榜`,
+    feed: "topfreeapplications",
+    genre: APPLE_SIMULATION_GENRE_ID,
+    externalUrl: `https://apps.apple.com/${country}/iphone/charts/${APPLE_SIMULATION_GENRE_ID}?chart=top-free`
+  };
+}
 
 const dashboards = [
   {
@@ -58,6 +69,7 @@ const dashboards = [
             genre: "6014",
             externalUrl: "https://www.qimai.cn/app/rank/appid/1561903786/country/cn"
           },
+          createFreeSimulationChart("cn", "国区"),
           {
             key: "grossingGames",
             label: "国区畅销游戏榜",
@@ -78,6 +90,7 @@ const dashboards = [
             feed: "topfreeapplications",
             genre: "6014"
           },
+          createFreeSimulationChart("th", "泰区"),
           {
             key: "grossingGames",
             label: "泰区畅销游戏榜",
@@ -98,6 +111,7 @@ const dashboards = [
             feed: "topfreeapplications",
             genre: "6014"
           },
+          createFreeSimulationChart("jp", "日区"),
           {
             key: "grossingGames",
             label: "日区畅销游戏榜",
@@ -113,6 +127,7 @@ const dashboards = [
         appId: "6746151928",
         charts: [
           { key: "freeGames", label: "韩区免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          createFreeSimulationChart("kr", "韩区"),
           { key: "grossingGames", label: "韩区畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
         ]
       },
@@ -122,6 +137,7 @@ const dashboards = [
         appId: "6746151928",
         charts: [
           { key: "freeGames", label: "台区免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          createFreeSimulationChart("tw", "台区"),
           { key: "grossingGames", label: "台区畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
         ]
       },
@@ -131,6 +147,7 @@ const dashboards = [
         appId: "6746151928",
         charts: [
           { key: "freeGames", label: "美区免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          createFreeSimulationChart("us", "美区"),
           { key: "grossingGames", label: "美区畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
         ]
       },
@@ -140,6 +157,7 @@ const dashboards = [
         appId: "6746151928",
         charts: [
           { key: "freeGames", label: "法国免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          createFreeSimulationChart("fr", "法国"),
           { key: "grossingGames", label: "法国畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
         ]
       },
@@ -149,6 +167,7 @@ const dashboards = [
         appId: "6746151928",
         charts: [
           { key: "freeGames", label: "巴西免费游戏榜", feed: "topfreeapplications", genre: "6014" },
+          createFreeSimulationChart("br", "巴西"),
           { key: "grossingGames", label: "巴西畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
         ]
       }

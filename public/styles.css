@@ -375,17 +375,18 @@ button:disabled {
 }
 
 .region-matrix-table thead th:first-child {
-  width: 17%;
+  width: 15%;
 }
 
 .region-matrix-table thead th:nth-child(2),
 .region-matrix-table thead th:nth-child(3),
-.region-matrix-table thead th:nth-child(4) {
-  width: 22%;
+.region-matrix-table thead th:nth-child(4),
+.region-matrix-table thead th:nth-child(5) {
+  width: 18%;
 }
 
 .region-matrix-table thead th:last-child {
-  width: 17%;
+  width: 13%;
 }
 
 .region-matrix-table tbody tr:hover {
@@ -1524,7 +1525,7 @@ button:disabled {
     border-top: 1px solid var(--soft);
     display: grid;
     gap: 14px 10px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 14px 16px;
   }
 

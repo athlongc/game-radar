@@ -285,18 +285,24 @@ function renderMatrixValue(value, url = "", className = "") {
 
 function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
   const freeRank = listing.ranks?.find((rank) => rank.key === "freeGames") || null;
+  const freeSimulationRank = listing.ranks?.find((rank) => rank.key === "freeSimulationGames") || null;
   const grossingRank = listing.ranks?.find((rank) => rank.key === "grossingGames") || null;
   const steamRank = getSteamTopSeller(dashboard, listing.country);
   const freeRankUrl = listing.country === "cn" ? freeRank?.externalUrl || "" : sharedIosRankUrl;
   const grossingRankUrl = listing.country === "cn" ? grossingRank?.externalUrl || "" : sharedIosRankUrl;
   const hasError = Boolean(
-    listing.lookup?.error || freeRank?.error || grossingRank?.error || steamRank?.error
+    listing.lookup?.error || freeRank?.error || freeSimulationRank?.error || grossingRank?.error || steamRank?.error
   );
   const freeValue = freeRank ? (freeRank.error ? "暂无" : formatRank(freeRank.rank, freeRank.topLimit)) : "—";
   const grossingValue = grossingRank
     ? grossingRank.error
       ? "暂无"
       : formatRank(grossingRank.rank, grossingRank.topLimit)
+    : "—";
+  const freeSimulationValue = freeSimulationRank
+    ? freeSimulationRank.error
+      ? "暂无"
+      : formatRank(freeSimulationRank.rank, freeSimulationRank.topLimit)
     : "—";
   const steamValue = steamRank
     ? steamRank.error
@@ -316,6 +322,9 @@ function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
       </td>
       <td data-label="iOS 免费游戏榜">
         ${renderMatrixValue(freeValue, freeRankUrl, freeValue === "—" ? "region-rank-empty" : "")}
+      </td>
+      <td data-label="iOS 免费模拟游戏榜">
+        ${renderMatrixValue(freeSimulationValue, freeRankUrl, freeSimulationValue === "—" ? "region-rank-empty" : "")}
       </td>
       <td data-label="Steam 畅销榜">
         <span class="steam-market-code">${steamRank ? `Steam ${escapeHtml(steamRank.displayCode || listing.country.toUpperCase())}` : "Steam"}</span>
@@ -424,6 +433,7 @@ function renderHeartopiaSummary(dashboard) {
               <th scope="col">地区</th>
               <th scope="col">iOS 畅销游戏榜</th>
               <th scope="col">iOS 免费游戏榜</th>
+              <th scope="col">iOS 免费模拟游戏榜</th>
               <th scope="col">Steam 畅销榜</th>
               <th scope="col">状态</th>
             </tr>
