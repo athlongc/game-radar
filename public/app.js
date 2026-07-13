@@ -358,17 +358,17 @@ function renderHeartopiaSummary(dashboard) {
     body: `
       <div class="overview-steam-primary">
         <div>
-          <div class="metric-label">Steam 当前在线</div>
+          <div class="metric-label">当前在线</div>
           <div class="overview-value">${formatNumber(dashboard.steam?.currentPlayers)}</div>
           <div class="metric-note">AppID ${escapeHtml(dashboard.steam?.appId || "-")}</div>
         </div>
         <div>
-          <div class="metric-label">Steam 累计好评率</div>
+          <div class="metric-label">累计好评率</div>
           <div class="overview-value">${dashboard.steamReviews?.positiveRate == null ? "暂无" : `${dashboard.steamReviews.positiveRate}%`}</div>
           <div class="metric-note">${escapeHtml(dashboard.steamReviews?.reviewScoreDesc || "评价")} · ${formatNumber(dashboard.steamReviews?.totalReviews)} 条</div>
         </div>
         <div>
-          <div class="metric-label">Steam 近30天好评率</div>
+          <div class="metric-label">近30天好评率</div>
           <div class="overview-value">${dashboard.steamReviews?.recentPositiveRate == null ? "暂无" : `${dashboard.steamReviews.recentPositiveRate}%`}</div>
           <div class="metric-note">近30天 · ${formatNumber(dashboard.steamReviews?.recentTotalReviews)} 条</div>
         </div>
