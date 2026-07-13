@@ -9,7 +9,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
 const PORT = Number(process.env.PORT || 5177);
 const HOST = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
-const PUBLIC_DASHBOARD_ID = "heartopia";
+const PUBLIC_DASHBOARD_IDS = ["heartopia", "torchlight-infinite"];
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -62,9 +62,10 @@ createServer(async (req, res) => {
     if (url.pathname === "/api/metrics") {
       const local = isLocalRequest(req);
       const requestedDashboardId = url.searchParams.get("dashboard") || "";
-      const dashboardId = local ? requestedDashboardId || null : PUBLIC_DASHBOARD_ID;
-      const force = url.searchParams.get("force") === "1" && (local || dashboardId === PUBLIC_DASHBOARD_ID);
-      json(res, 200, await getMetrics({ force, dashboardId }));
+      const dashboardId = local ? requestedDashboardId || null : null;
+      const dashboardIds = local ? null : PUBLIC_DASHBOARD_IDS;
+      const force = url.searchParams.get("force") === "1";
+      json(res, 200, await getMetrics({ force, dashboardId, dashboardIds }));
       return;
     }
     if (url.pathname === "/api/health") {

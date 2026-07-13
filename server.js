@@ -4,6 +4,9 @@ const AMAZON_CACHE_TTL_MS = 60 * 60 * 1000;
 const STEAM_TOP_SELLER_TOP_LIMIT = 100;
 const PUBLIC_DASHBOARD_ID = "heartopia";
 const APPLE_SIMULATION_GENRE_ID = "7015";
+const TORCHLIGHT_OVERSEAS_DIANDIAN_URL =
+  "https://app.diandian.com/app/nw2uwuzze0jwdfr/ios-grank?market=1&country=125&system=4&id=1593130084&n=火炬之光：無限";
+const TORCHLIGHT_CN_QIMAI_URL = "https://www.qimai.cn/app/rank/appid/1528917194/country/cn";
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
 const NAVIMOW_NEWSROOM_URL = "https://navimow.com/blogs/newsroom";
 const NAVIMOW_NEWSROOM_ATOM_URL = "https://navimow.com/blogs/newsroom.atom";
@@ -27,6 +30,32 @@ function createFreeSimulationChart(country, regionLabel) {
   };
 }
 
+function createAppleGameCharts(country, regionLabel, appId, featuredChart) {
+  const externalUrl = `https://apps.apple.com/${country}/app/id${appId}`;
+  return [
+    {
+      key: "freeGames",
+      label: `${regionLabel}免费游戏榜`,
+      feed: "topfreeapplications",
+      genre: "6014",
+      externalUrl
+    },
+    {
+      ...featuredChart,
+      label: `${regionLabel}${featuredChart.label}`,
+      feed: "topfreeapplications",
+      externalUrl
+    },
+    {
+      key: "grossingGames",
+      label: `${regionLabel}畅销游戏榜`,
+      feed: "topgrossingapplications",
+      genre: "6014",
+      externalUrl
+    }
+  ];
+}
+
 const dashboards = [
   {
     id: "heartopia",
@@ -45,12 +74,6 @@ const dashboards = [
       { country: "fr", label: "法国畅销", displayCode: "FR", url: "https://store.steampowered.com/charts/topselling/FR" },
       { country: "br", label: "巴西畅销", displayCode: "BR", url: "https://store.steampowered.com/charts/topselling/BR" }
     ],
-    stockQuote: {
-      symbol: "02400.HK",
-      code: "hk02400",
-      label: "心动公司股价",
-      externalUrl: "https://xueqiu.com/S/02400"
-    },
     tapTap: {
       label: "TapTap",
       appId: "45213",
@@ -171,6 +194,81 @@ const dashboards = [
           { key: "grossingGames", label: "巴西畅销游戏榜", feed: "topgrossingapplications", genre: "6014" }
         ]
       }
+    ]
+  },
+  {
+    id: "torchlight-infinite",
+    title: "火炬之光：无限 / Torchlight: Infinite",
+    subtitle: "Steam 在线与 iOS 游戏榜",
+    publisher: "XD",
+    layout: "regionalGameComparison",
+    regionCountryOrder: ["cn", "tw", "kr", "jp", "ru", "sg"],
+    featuredFreeRankKey: "freeActionGames",
+    featuredFreeRankLabel: "iOS 免费动作游戏榜",
+    steamEditionLabel: "Steam 国际服",
+    steamAppId: "1974050",
+    steamExternalUrl: "https://steamdb.info/app/1974050/charts/",
+    secondarySteamApp: {
+      label: "Steam 国区",
+      appId: "2315040",
+      externalUrl: "https://steamdb.info/app/2315040/charts/",
+      topSellerMarket: {
+        country: "cn",
+        label: "Steam 国区畅销",
+        displayCode: "CN",
+        url: "https://store.steampowered.com/charts/topselling/CN"
+      }
+    },
+    steamTopSellerMarkets: [
+      { country: "global", label: "全球畅销", displayCode: "Global", url: "https://store.steampowered.com/charts/topselling/global" },
+      { country: "tw", label: "台区畅销", displayCode: "TW", url: "https://store.steampowered.com/charts/topselling/TW" },
+      { country: "kr", label: "韩区畅销", displayCode: "KR", url: "https://store.steampowered.com/charts/topselling/KR" },
+      { country: "jp", label: "日区畅销", displayCode: "JP", url: "https://store.steampowered.com/charts/topselling/JP" },
+      { country: "ru", label: "俄区畅销", displayCode: "RU", url: "https://store.steampowered.com/charts/topselling/RU" },
+      { country: "sg", label: "新加坡畅销", displayCode: "SG", url: "https://store.steampowered.com/charts/topselling/SG" }
+    ],
+    tapTap: {
+      label: "TapTap",
+      appId: "172664",
+      url: "https://www.taptap.cn/app/172664"
+    },
+    appleMonitors: [
+      {
+        country: "cn",
+        label: "中国大陆 iOS",
+        appId: "1528917194",
+        charts: createAppleGameCharts(
+          "cn",
+          "国区",
+          "1528917194",
+          {
+            key: "freeActionGames",
+            label: "免费动作游戏榜",
+            genre: "7001"
+          }
+        ).map((chart) => ({ ...chart, externalUrl: TORCHLIGHT_CN_QIMAI_URL }))
+      },
+      ...[
+        ["tw", "台湾", "台区"],
+        ["kr", "韩国", "韩区"],
+        ["jp", "日本", "日区"],
+        ["ru", "俄罗斯", "俄区"],
+        ["sg", "新加坡", "新加坡"]
+      ].map(([country, countryLabel, regionLabel]) => ({
+        country,
+        label: `${countryLabel} iOS`,
+        appId: "1593130084",
+        charts: createAppleGameCharts(
+          country,
+          regionLabel,
+          "1593130084",
+          {
+            key: "freeActionGames",
+            label: "免费动作游戏榜",
+            genre: "7001"
+          }
+        ).map((chart) => ({ ...chart, externalUrl: TORCHLIGHT_OVERSEAS_DIANDIAN_URL }))
+      }))
     ]
   },
   {
@@ -655,6 +753,27 @@ async function getSteamReviewMetric(appId) {
     totalNegative: summary.total_negative ?? null,
     totalReviews,
     ...recent
+  };
+}
+
+async function getSteamEditionMetric(config) {
+  const [steam, reviews, topSeller] = await Promise.all([
+    getSteamMetric(config.appId).catch((error) => ({ appId: config.appId, error: error.message })),
+    getSteamReviewMetric(config.appId).catch((error) => ({ appId: config.appId, error: error.message })),
+    config.topSellerMarket
+      ? getSteamTopSellerMarket(config.appId, config.topSellerMarket).catch((error) => ({
+          ...config.topSellerMarket,
+          rank: null,
+          topLimit: STEAM_TOP_SELLER_TOP_LIMIT,
+          error: error.message || "Steam CN top sellers unavailable"
+        }))
+      : null
+  ]);
+  return {
+    ...config,
+    steam,
+    reviews,
+    topSeller
   };
 }
 
@@ -1392,7 +1511,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
   const now = new Date().toISOString();
   const metrics = await Promise.all(
     selectedDashboards.map(async (dashboard) => {
-      const [steam, steamReviews, steamTopSellers, stockQuote, tapTap, exchangeRates] = await Promise.all([
+      const [steam, steamReviews, steamTopSellers, secondarySteam, stockQuote, tapTap, exchangeRates] = await Promise.all([
         dashboard.steamAppId ? getSteamMetric(dashboard.steamAppId).catch((error) => ({ error: error.message })) : null,
         dashboard.steamAppId
           ? getSteamReviewMetric(dashboard.steamAppId).catch((error) => ({ error: error.message }))
@@ -1405,6 +1524,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
               error: error.message || "Steam top sellers unavailable"
             }))
           : null,
+        dashboard.secondarySteamApp ? getSteamEditionMetric(dashboard.secondarySteamApp) : null,
         dashboard.stockQuote ? getStockQuote(dashboard.stockQuote).catch((error) => ({ error: error.message })) : null,
         dashboard.tapTap ? getTapTapMetric(dashboard.tapTap).catch((error) => ({ ...dashboard.tapTap, error: error.message })) : null,
         dashboard.exchangeRates ? getExchangeRates().catch((error) => ({ error: error.message })) : null
@@ -1487,6 +1607,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
         steam,
         steamReviews,
         steamTopSellers,
+        secondarySteam,
         stockQuote,
         tapTap,
         exchangeRates,
@@ -1542,14 +1663,17 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
 }
 
 /**
- * @param {{ force?: boolean, dashboardId?: string | null }} [options]
+ * @param {{ force?: boolean, dashboardId?: string | null, dashboardIds?: string[] | null }} [options]
  */
-export async function getMetrics({ force = false, dashboardId = null } = {}) {
-  const selectedDashboards = dashboardId ? dashboards.filter((dashboard) => dashboard.id === dashboardId) : dashboards;
-  if (dashboardId && selectedDashboards.length === 0) {
-    throw new RangeError(`Unknown dashboard: ${dashboardId}`);
+export async function getMetrics({ force = false, dashboardId = null, dashboardIds = null } = {}) {
+  const requestedDashboardIds = dashboardId ? [dashboardId] : dashboardIds;
+  const selectedDashboards = requestedDashboardIds?.length
+    ? dashboards.filter((dashboard) => requestedDashboardIds.includes(dashboard.id))
+    : dashboards;
+  if (requestedDashboardIds?.length && selectedDashboards.length !== requestedDashboardIds.length) {
+    throw new RangeError(`Unknown dashboard: ${requestedDashboardIds.join(", ")}`);
   }
-  const cacheKey = dashboardId || "all";
+  const cacheKey = requestedDashboardIds?.length ? [...requestedDashboardIds].sort().join(",") : "all";
   const cached = metricsCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
     return { ...cached.data, cached: true };

@@ -220,6 +220,14 @@ button:disabled {
   white-space: nowrap;
 }
 
+.overview-steam-edition {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  margin-bottom: 16px;
+}
+
 .overview-steam-global {
   align-items: center;
   background: #f7f9fa;

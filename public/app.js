@@ -17,7 +17,8 @@ const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit"
 });
-const PUBLIC_DASHBOARD_ID = "heartopia";
+const PUBLIC_DASHBOARD_IDS = ["heartopia", "torchlight-infinite"];
+const PUBLIC_DASHBOARD_ID = PUBLIC_DASHBOARD_IDS[0];
 const IOS_FREE_RANK_GROUP_COUNTRIES = ["cn", "tw", "kr", "th"];
 const IOS_FREE_RANK_GROUP_LABELS = {
   cn: "中国",
@@ -33,7 +34,9 @@ const COUNTRY_LABELS = {
   jp: "日本",
   us: "美国",
   fr: "法国",
-  br: "巴西"
+  br: "巴西",
+  ru: "俄罗斯",
+  sg: "新加坡"
 };
 
 let currentMetrics = null;
@@ -43,14 +46,14 @@ function isLocalHost() {
 }
 
 function canForceRefresh() {
-  return isLocalHost() || currentMetrics?.dashboards?.[0]?.id === PUBLIC_DASHBOARD_ID;
+  return (
+    isLocalHost() ||
+    (currentMetrics?.dashboards || []).every((dashboard) => PUBLIC_DASHBOARD_IDS.includes(dashboard.id))
+  );
 }
 
 function getMetricsUrl(force = false) {
   const params = new URLSearchParams();
-  if (!isLocalHost()) {
-    params.set("dashboard", PUBLIC_DASHBOARD_ID);
-  }
   if (force && canForceRefresh()) {
     params.set("force", "1");
   }
@@ -127,6 +130,9 @@ function formatRank(rank, limit = 100) {
 
 function getSteamTopSeller(dashboard, country = "global") {
   const normalizedCountry = String(country || "global").toLowerCase();
+  if (normalizedCountry === "cn" && dashboard.secondarySteam?.topSeller) {
+    return dashboard.secondarySteam.topSeller;
+  }
   return (dashboard.steamTopSellers?.markets || []).find((market) => market.country === normalizedCountry) || null;
 }
 
@@ -189,6 +195,10 @@ function render(metrics) {
   renderNav(metrics.dashboards, dashboard.id);
   renderSummary(dashboard);
   renderMonitorList(dashboard);
+}
+
+function usesRegionalGameComparison(dashboard) {
+  return dashboard.id === PUBLIC_DASHBOARD_ID || dashboard.layout === "regionalGameComparison";
 }
 
 function renderNav(dashboards, activeId) {
@@ -283,15 +293,17 @@ function renderMatrixValue(value, url = "", className = "") {
     : content;
 }
 
-function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
+function renderRegionalGameRow(dashboard, listing, sharedIosRankUrl = "") {
   const freeRank = listing.ranks?.find((rank) => rank.key === "freeGames") || null;
-  const freeSimulationRank = listing.ranks?.find((rank) => rank.key === "freeSimulationGames") || null;
+  const featuredFreeRankKey = dashboard.featuredFreeRankKey || "freeSimulationGames";
+  const featuredFreeRankLabel = dashboard.featuredFreeRankLabel || "iOS 免费模拟游戏榜";
+  const featuredFreeRank = listing.ranks?.find((rank) => rank.key === featuredFreeRankKey) || null;
   const grossingRank = listing.ranks?.find((rank) => rank.key === "grossingGames") || null;
   const steamRank = getSteamTopSeller(dashboard, listing.country);
-  const freeRankUrl = listing.country === "cn" ? freeRank?.externalUrl || "" : sharedIosRankUrl;
-  const grossingRankUrl = listing.country === "cn" ? grossingRank?.externalUrl || "" : sharedIosRankUrl;
+  const freeRankUrl = freeRank?.externalUrl || sharedIosRankUrl;
+  const grossingRankUrl = grossingRank?.externalUrl || sharedIosRankUrl;
   const hasError = Boolean(
-    listing.lookup?.error || freeRank?.error || freeSimulationRank?.error || grossingRank?.error || steamRank?.error
+    listing.lookup?.error || freeRank?.error || featuredFreeRank?.error || grossingRank?.error || steamRank?.error
   );
   const freeValue = freeRank ? (freeRank.error ? "暂无" : formatRank(freeRank.rank, freeRank.topLimit)) : "—";
   const grossingValue = grossingRank
@@ -299,10 +311,10 @@ function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
       ? "暂无"
       : formatRank(grossingRank.rank, grossingRank.topLimit)
     : "—";
-  const freeSimulationValue = freeSimulationRank
-    ? freeSimulationRank.error
+  const featuredFreeValue = featuredFreeRank
+    ? featuredFreeRank.error
       ? "暂无"
-      : formatRank(freeSimulationRank.rank, freeSimulationRank.topLimit)
+      : formatRank(featuredFreeRank.rank, featuredFreeRank.topLimit)
     : "—";
   const steamValue = steamRank
     ? steamRank.error
@@ -323,8 +335,8 @@ function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
       <td data-label="iOS 免费游戏榜">
         ${renderMatrixValue(freeValue, freeRankUrl, freeValue === "—" ? "region-rank-empty" : "")}
       </td>
-      <td data-label="iOS 免费模拟游戏榜">
-        ${renderMatrixValue(freeSimulationValue, freeRankUrl, freeSimulationValue === "—" ? "region-rank-empty" : "")}
+      <td data-label="${escapeHtml(featuredFreeRankLabel)}">
+        ${renderMatrixValue(featuredFreeValue, freeRankUrl, featuredFreeValue === "—" ? "region-rank-empty" : "")}
       </td>
       <td data-label="Steam 畅销榜">
         <span class="steam-market-code">${steamRank ? `Steam ${escapeHtml(steamRank.displayCode || listing.country.toUpperCase())}` : "Steam"}</span>
@@ -340,48 +352,89 @@ function renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl = "") {
   `;
 }
 
-function renderHeartopiaSummary(dashboard) {
-  const stock = dashboard.stockQuote || {};
-  const tapTap = dashboard.tapTap || {};
-  const globalSteam = getSteamTopSeller(dashboard, "global");
-  const stockClass = stock.change > 0 ? "up" : stock.change < 0 ? "down" : "";
-  const preferredCountryOrder = ["cn", "tw", "kr", "th", "jp", "us", "fr", "br"];
-  const listings = preferredCountryOrder
-    .map((country) => (dashboard.apple || []).find((listing) => listing.country === country))
-    .filter(Boolean);
-  const japanListing = listings.find((listing) => listing.country === "jp");
-  const sharedIosRankUrl = japanListing?.ranks?.find((rank) => rank.key === "grossingGames")?.externalUrl || "";
-
-  const steamCard = renderOverviewCard({
-    className: "overview-steam-card",
-    url: dashboard.steamExternalUrl || "",
-    body: `
-      <div class="overview-steam-primary">
-        <div>
-          <div class="metric-label">当前在线</div>
-          <div class="overview-value">${formatNumber(dashboard.steam?.currentPlayers)}</div>
-          <div class="metric-note">AppID ${escapeHtml(dashboard.steam?.appId || "-")}</div>
-        </div>
-        <div>
-          <div class="metric-label">累计好评率</div>
-          <div class="overview-value">${dashboard.steamReviews?.positiveRate == null ? "暂无" : `${dashboard.steamReviews.positiveRate}%`}</div>
-          <div class="metric-note">${escapeHtml(dashboard.steamReviews?.reviewScoreDesc || "评价")} · ${formatNumber(dashboard.steamReviews?.totalReviews)} 条</div>
-        </div>
-        <div>
-          <div class="metric-label">近30天好评率</div>
-          <div class="overview-value">${dashboard.steamReviews?.recentPositiveRate == null ? "暂无" : `${dashboard.steamReviews.recentPositiveRate}%`}</div>
-          <div class="metric-note">近30天 · ${formatNumber(dashboard.steamReviews?.recentTotalReviews)} 条</div>
-        </div>
-      </div>
-      <div class="overview-steam-global">
+function renderSteamOverviewCard({ editionLabel = "", steam, reviews, url = "", globalSteam = null, topSellerLabel = "" }) {
+  const editionStrip = editionLabel
+    ? globalSteam
+      ? `<div class="overview-steam-global">
+          <div>
+            <strong>${escapeHtml(topSellerLabel || `${editionLabel}全球畅销`)}</strong>
+            <span>${escapeHtml(globalSteam.displayCode || "Global")}</span>
+          </div>
+          <b>${escapeHtml(formatSteamTopSellerRank(globalSteam))}</b>
+        </div>`
+      : `<div class="overview-steam-global">
+          <div>
+            <strong>独立国服数据</strong>
+            <span>与国际服分开统计</span>
+          </div>
+          <b>CN</b>
+        </div>`
+    : `<div class="overview-steam-global">
         <div>
           <strong>Steam 全球畅销</strong>
           <span>${escapeHtml(globalSteam?.displayCode || "Global")}</span>
         </div>
         <b>${escapeHtml(formatSteamTopSellerRank(globalSteam))}</b>
+      </div>`;
+
+  return renderOverviewCard({
+    className: "overview-steam-card",
+    url,
+    body: `
+      ${editionLabel ? `<div class="overview-steam-edition">${escapeHtml(editionLabel)}</div>` : ""}
+      <div class="overview-steam-primary">
+        <div>
+          <div class="metric-label">当前在线</div>
+          <div class="overview-value">${formatNumber(steam?.currentPlayers)}</div>
+          <div class="metric-note">AppID ${escapeHtml(steam?.appId || "-")}</div>
+        </div>
+        <div>
+          <div class="metric-label">累计好评率</div>
+          <div class="overview-value">${reviews?.positiveRate == null ? "暂无" : `${reviews.positiveRate}%`}</div>
+          <div class="metric-note">${escapeHtml(reviews?.reviewScoreDesc || "评价")} · ${formatNumber(reviews?.totalReviews)} 条</div>
+        </div>
+        <div>
+          <div class="metric-label">近30天好评率</div>
+          <div class="overview-value">${reviews?.recentPositiveRate == null ? "暂无" : `${reviews.recentPositiveRate}%`}</div>
+          <div class="metric-note">近30天 · ${formatNumber(reviews?.recentTotalReviews)} 条</div>
+        </div>
       </div>
+      ${editionStrip}
     `
   });
+}
+
+function renderRegionalGameSummary(dashboard) {
+  const stock = dashboard.stockQuote || {};
+  const tapTap = dashboard.tapTap || {};
+  const globalSteam = getSteamTopSeller(dashboard, "global");
+  const stockClass = stock.change > 0 ? "up" : stock.change < 0 ? "down" : "";
+  const preferredCountryOrder = dashboard.regionCountryOrder || ["cn", "tw", "kr", "th", "jp", "us", "fr", "br"];
+  const listings = preferredCountryOrder
+    .map((country) => (dashboard.apple || []).find((listing) => listing.country === country))
+    .filter(Boolean);
+  const japanListing = listings.find((listing) => listing.country === "jp");
+  const sharedIosRankUrl = japanListing?.ranks?.find((rank) => rank.key === "grossingGames")?.externalUrl || "";
+  const featuredFreeRankLabel = dashboard.featuredFreeRankLabel || "iOS 免费模拟游戏榜";
+
+  const steamCard = renderSteamOverviewCard({
+    editionLabel: dashboard.steamEditionLabel || "",
+    steam: dashboard.steam,
+    reviews: dashboard.steamReviews,
+    url: dashboard.steamExternalUrl || "",
+    globalSteam
+  });
+
+  const secondarySteamCard = dashboard.secondarySteam
+    ? renderSteamOverviewCard({
+        editionLabel: dashboard.secondarySteam.label || "Steam 国区",
+        steam: dashboard.secondarySteam.steam,
+        reviews: dashboard.secondarySteam.reviews,
+        url: dashboard.secondarySteam.externalUrl || "",
+        globalSteam: dashboard.secondarySteam.topSeller,
+        topSellerLabel: dashboard.secondarySteam.topSeller?.label || "Steam 国区畅销"
+      })
+    : "";
 
   const stockCard = renderOverviewCard({
     className: "overview-stock-card",
@@ -419,7 +472,7 @@ function renderHeartopiaSummary(dashboard) {
   return `
     <div class="overview-kpi-grid">
       ${steamCard}
-      ${stockCard}
+      ${secondarySteamCard || stockCard}
       ${tapTapCard}
     </div>
     <section class="region-matrix-panel" aria-labelledby="regionMatrixTitle">
@@ -432,18 +485,18 @@ function renderHeartopiaSummary(dashboard) {
       </div>
       <div class="region-matrix-scroll">
         <table class="region-matrix-table">
-          <caption>心动小镇各地区 iOS 与 Steam 排名对比</caption>
+          <caption>${escapeHtml(dashboard.title)}各地区 iOS 与 Steam 排名对比</caption>
           <thead>
             <tr>
               <th scope="col">地区</th>
               <th scope="col">iOS 畅销游戏榜</th>
               <th scope="col">iOS 免费游戏榜</th>
-              <th scope="col">iOS 免费模拟游戏榜</th>
+              <th scope="col">${escapeHtml(featuredFreeRankLabel)}</th>
               <th scope="col">Steam 畅销榜</th>
               <th scope="col">状态</th>
             </tr>
           </thead>
-          <tbody>${listings.map((listing) => renderHeartopiaRegionRow(dashboard, listing, sharedIosRankUrl)).join("")}</tbody>
+          <tbody>${listings.map((listing) => renderRegionalGameRow(dashboard, listing, sharedIosRankUrl)).join("")}</tbody>
         </table>
       </div>
       <p class="region-matrix-note">榜单仅显示 Top 100，“&gt;100”表示未进入 Top 100。点击排名可查看可用的数据源。</p>
@@ -452,10 +505,10 @@ function renderHeartopiaSummary(dashboard) {
 }
 
 function renderSummary(dashboard) {
-  const isHeartopia = dashboard.id === PUBLIC_DASHBOARD_ID;
-  summaryEl.classList.toggle("heartopia-summary", isHeartopia);
-  if (isHeartopia) {
-    summaryEl.innerHTML = renderHeartopiaSummary(dashboard);
+  const isRegionalGameDashboard = usesRegionalGameComparison(dashboard);
+  summaryEl.classList.toggle("heartopia-summary", isRegionalGameDashboard);
+  if (isRegionalGameDashboard) {
+    summaryEl.innerHTML = renderRegionalGameSummary(dashboard);
     return;
   }
 
@@ -838,7 +891,7 @@ function renderMonitorList(dashboard) {
     </article>
   `;
   monitorListEl.innerHTML =
-    dashboard.id === PUBLIC_DASHBOARD_ID
+    usesRegionalGameComparison(dashboard)
       ? `<details class="detail-disclosure">
           <summary>
             <span>各地区应用详情与 Top 5</span>
