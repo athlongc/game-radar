@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node --env-file-if-exists=.env local-server.js",
+    "collect:taptap": "node scripts/collect-taptap-history.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "check": "npm run typecheck && node --check server.js && node --check local-server.js && node --check public/app.js",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",

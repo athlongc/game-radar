@@ -1,0 +1,42 @@
+name: Daily TapTap snapshot
+
+on:
+  schedule:
+    # GitHub Actions cron uses UTC. 16:00 UTC is 00:00 the next day in Shanghai.
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-taptap-snapshot
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Collect TapTap snapshot
+        run: node scripts/collect-taptap-history.mjs
+
+      - name: Commit updated history
+        run: |
+          if git diff --quiet -- public/data/taptap-history.json; then
+            echo "No TapTap history change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/taptap-history.json
+          git commit -m "Update daily TapTap snapshot"
+          git push

@@ -38,8 +38,16 @@ const COUNTRY_LABELS = {
   ru: "俄罗斯",
   sg: "新加坡"
 };
+const TAPTAP_TREND_METRICS = [
+  { key: "pcDownloadCount", label: "PC 下载", kind: "count" },
+  { key: "downloadCount", label: "总下载", kind: "count" },
+  { key: "fansCount", label: "关注数", kind: "count" },
+  { key: "latestScore", label: "近期评分", kind: "score" }
+];
 
 let currentMetrics = null;
+let tapTapHistory = { games: {} };
+let selectedTapTapMetric = "pcDownloadCount";
 
 function isLocalHost() {
   return location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "::1";
@@ -181,6 +189,162 @@ function formatChange(value) {
 function formatTime(value) {
   if (!value) return "未知";
   return dateFormatter.format(new Date(value));
+}
+
+function formatTapTapTrendValue(value, metric, compact = false) {
+  if (value === null || value === undefined || value === "") return "暂无";
+  if (!Number.isFinite(Number(value))) return "暂无";
+  if (metric.kind === "score") return Number(value).toFixed(1);
+  return compact ? formatWan(value) : formatNumber(value);
+}
+
+function formatTapTapTrendDelta(value, metric) {
+  if (value === null || value === undefined || value === "") return "待积累";
+  if (!Number.isFinite(Number(value))) return "待积累";
+  const number = Number(value);
+  const prefix = number > 0 ? "+" : "";
+  if (metric.kind === "score") return `${prefix}${number.toFixed(1)}`;
+  return `${prefix}${formatNumber(number)}`;
+}
+
+function formatTapTapSnapshotDate(value = "") {
+  const [, month = "", day = ""] = String(value).split("-");
+  return month && day ? `${month}/${day}` : String(value);
+}
+
+function getTapTapTrendSnapshots(dashboardId) {
+  const snapshots = tapTapHistory?.games?.[dashboardId]?.snapshots;
+  if (!Array.isArray(snapshots)) return [];
+  return snapshots
+    .filter((snapshot) => snapshot?.date)
+    .sort((left, right) => String(left.date).localeCompare(String(right.date)))
+    .slice(-60);
+}
+
+function renderTapTapTrendChart(dashboard, snapshots, metric) {
+  const values = snapshots.map((snapshot) => Number(snapshot[metric.key]));
+  if (!values.length || values.some((value) => !Number.isFinite(value))) {
+    return `<div class="taptap-trend-empty">历史数据将在每日采集后显示</div>`;
+  }
+  if (snapshots.length === 1) {
+    return `<div class="taptap-trend-empty">
+      <strong>首个快照已记录</strong>
+      <span>下一次采集后开始形成变化曲线</span>
+    </div>`;
+  }
+
+  const width = 960;
+  const height = 250;
+  const left = 72;
+  const right = 26;
+  const top = 22;
+  const bottom = 42;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const valueMin = Math.min(...values);
+  const valueMax = Math.max(...values);
+  const minimumRange = metric.kind === "score" ? 0.4 : Math.max(Math.abs(valueMax) * 0.006, 1);
+  const range = Math.max(valueMax - valueMin, minimumRange);
+  const yMin = valueMin - range * 0.12;
+  const yMax = valueMax + range * 0.12;
+  const xForIndex = (index) =>
+    snapshots.length === 1 ? left + chartWidth / 2 : left + (chartWidth * index) / (snapshots.length - 1);
+  const yForValue = (value) => top + ((yMax - value) / (yMax - yMin)) * chartHeight;
+  const points = values.map((value, index) => ({ x: xForIndex(index), y: yForValue(value) }));
+  const linePath =
+    points.length === 1
+      ? `M ${points[0].x - 10} ${points[0].y} L ${points[0].x + 10} ${points[0].y}`
+      : points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const areaPath = `${linePath} L ${points.at(-1).x} ${top + chartHeight} L ${points[0].x} ${
+    top + chartHeight
+  } Z`;
+  const gridValues = [yMax, yMin + (yMax - yMin) / 2, yMin];
+  const tickIndexes = [...new Set([0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1])];
+  const chartId = `taptapTrendChart-${dashboard.id}-${metric.key}`;
+
+  return `
+    <svg class="taptap-trend-chart" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${chartId}-title ${chartId}-desc">
+      <title id="${chartId}-title">${escapeHtml(dashboard.title)} ${escapeHtml(metric.label)}趋势</title>
+      <desc id="${chartId}-desc">从 ${escapeHtml(snapshots[0].date)} 到 ${escapeHtml(
+        snapshots.at(-1).date
+      )} 的每日零点快照，共 ${snapshots.length} 条。</desc>
+      ${gridValues
+        .map((value) => {
+          const y = yForValue(value);
+          return `<line class="taptap-trend-gridline" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"></line>
+            <text class="taptap-trend-axis-label" x="${left - 12}" y="${y + 4}" text-anchor="end">${escapeHtml(
+              formatTapTapTrendValue(value, metric, true)
+            )}</text>`;
+        })
+        .join("")}
+      <path class="taptap-trend-area" d="${areaPath}"></path>
+      <path class="taptap-trend-line" d="${linePath}"></path>
+      <circle class="taptap-trend-point" cx="${points.at(-1).x}" cy="${points.at(-1).y}" r="5"></circle>
+      ${tickIndexes
+        .map(
+          (index) =>
+            `<text class="taptap-trend-axis-label" x="${xForIndex(index)}" y="${height - 12}" text-anchor="middle">${escapeHtml(
+              formatTapTapSnapshotDate(snapshots[index].date)
+            )}</text>`
+        )
+        .join("")}
+    </svg>
+  `;
+}
+
+function renderTapTapTrend(dashboard) {
+  const snapshots = getTapTapTrendSnapshots(dashboard.id);
+  const metric = TAPTAP_TREND_METRICS.find((item) => item.key === selectedTapTapMetric) || TAPTAP_TREND_METRICS[0];
+  const latest = snapshots.at(-1);
+  const previous = snapshots.at(-2);
+  const comparison = snapshots.length > 7 ? snapshots.at(-8) : snapshots[0];
+  const currentValue = latest ? Number(latest[metric.key]) : null;
+  const previousValue = previous ? Number(previous[metric.key]) : null;
+  const comparisonValue = snapshots.length > 1 && comparison ? Number(comparison[metric.key]) : null;
+  const dailyDelta = Number.isFinite(currentValue) && Number.isFinite(previousValue) ? currentValue - previousValue : null;
+  const periodDelta =
+    Number.isFinite(currentValue) && Number.isFinite(comparisonValue) ? currentValue - comparisonValue : null;
+  const periodLabel = snapshots.length > 7 ? "近 7 日" : "阶段变化";
+
+  return `
+    <section class="taptap-trend-panel" aria-labelledby="tapTapTrendTitle-${escapeHtml(dashboard.id)}">
+      <div class="taptap-trend-heading">
+        <div>
+          <p class="section-kicker">TapTap trend</p>
+          <h2 id="tapTapTrendTitle-${escapeHtml(dashboard.id)}">TapTap 每日趋势</h2>
+        </div>
+        <div class="taptap-trend-tabs" role="group" aria-label="选择 TapTap 趋势指标">
+          ${TAPTAP_TREND_METRICS.map(
+            (item) => `<button type="button" class="taptap-trend-tab ${
+              item.key === metric.key ? "active" : ""
+            }" data-taptap-trend-metric="${item.key}" aria-pressed="${item.key === metric.key}">${escapeHtml(
+              item.label
+            )}</button>`
+          ).join("")}
+        </div>
+      </div>
+      <div class="taptap-trend-summary">
+        <div class="taptap-trend-current">
+          <span>当前${escapeHtml(metric.label)}</span>
+          <strong>${formatTapTapTrendValue(currentValue, metric)}</strong>
+          <small>${latest ? `快照 ${escapeHtml(latest.date)}` : "等待首次采集"}</small>
+        </div>
+        <div>
+          <span>较前一日</span>
+          <strong>${formatTapTapTrendDelta(dailyDelta, metric)}</strong>
+        </div>
+        <div>
+          <span>${periodLabel}</span>
+          <strong>${formatTapTapTrendDelta(periodDelta, metric)}</strong>
+        </div>
+      </div>
+      <div class="taptap-trend-chart-wrap">${renderTapTapTrendChart(dashboard, snapshots, metric)}</div>
+      <div class="taptap-trend-footer">
+        <span>每天北京时间 00:00 自动采集</span>
+        <span>${snapshots.length ? `最近 ${snapshots.length} 个日快照` : "历史数据尚未生成"}</span>
+      </div>
+    </section>
+  `;
 }
 
 function getCurrentDashboard(metrics) {
@@ -477,6 +641,7 @@ function renderRegionalGameSummary(dashboard) {
       ${secondarySteamCard || stockCard}
       ${tapTapCard}
     </div>
+    ${renderTapTapTrend(dashboard)}
     <section class="region-matrix-panel" aria-labelledby="regionMatrixTitle">
       <div class="region-matrix-heading">
         <div>
@@ -1137,6 +1302,12 @@ function getAmazonTargetCard(event) {
 }
 
 summaryEl.addEventListener("click", (event) => {
+  const trendButton = event.target instanceof Element ? event.target.closest("[data-taptap-trend-metric]") : null;
+  if (trendButton) {
+    selectedTapTapMetric = trendButton.dataset.taptapTrendMetric || "pcDownloadCount";
+    if (currentMetrics) render(currentMetrics);
+    return;
+  }
   const card = getAmazonTargetCard(event);
   if (!card) return;
   scrollToAmazonMarket(card.dataset.amazonTarget);
@@ -1228,7 +1399,12 @@ async function load(force = false) {
   refreshButton.disabled = true;
   statusEl.textContent = shouldForce ? "正在强制刷新" : "正在加载";
   try {
-    currentMetrics = await fetchJson(getMetricsUrl(shouldForce));
+    const [metrics, history] = await Promise.all([
+      fetchJson(getMetricsUrl(shouldForce)),
+      fetchJson(`/data/taptap-history.json?v=${Date.now()}`).catch(() => ({ games: {} }))
+    ]);
+    currentMetrics = metrics;
+    tapTapHistory = history;
     render(currentMetrics);
     statusEl.textContent = `${formatTime(currentMetrics.generatedAt)}${currentMetrics.cached ? " · 缓存" : ""}`;
   } catch (error) {

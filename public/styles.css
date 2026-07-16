@@ -319,6 +319,170 @@ button:disabled {
   padding: 11px 12px;
 }
 
+.taptap-trend-panel {
+  background: var(--panel);
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.taptap-trend-heading {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  padding: 18px 20px 8px;
+}
+
+.taptap-trend-heading h2 {
+  font-size: 20px;
+}
+
+.taptap-trend-tabs {
+  background: #f4f6f8;
+  border-radius: 8px;
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+}
+
+.taptap-trend-tab {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.taptap-trend-tab:hover {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: transparent;
+}
+
+.taptap-trend-tab.active {
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.1);
+  color: var(--accent);
+}
+
+.taptap-trend-summary {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(210px, 1.5fr) repeat(2, minmax(140px, 0.75fr));
+  padding: 12px 20px 0;
+}
+
+.taptap-trend-summary > div {
+  border-left: 1px solid var(--soft);
+  min-height: 64px;
+  padding-left: 16px;
+}
+
+.taptap-trend-summary > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.taptap-trend-summary span,
+.taptap-trend-summary small,
+.taptap-trend-summary strong {
+  display: block;
+}
+
+.taptap-trend-summary span,
+.taptap-trend-summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.taptap-trend-summary strong {
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  margin-top: 6px;
+}
+
+.taptap-trend-current strong {
+  color: var(--accent);
+  font-size: 30px;
+}
+
+.taptap-trend-summary small {
+  margin-top: 6px;
+}
+
+.taptap-trend-chart-wrap {
+  padding: 2px 12px 0;
+}
+
+.taptap-trend-chart {
+  display: block;
+  height: auto;
+  max-height: 250px;
+  width: 100%;
+}
+
+.taptap-trend-gridline {
+  stroke: #e8ebf0;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-axis-label {
+  fill: #7b8493;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.taptap-trend-area {
+  fill: rgba(14, 124, 134, 0.08);
+}
+
+.taptap-trend-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-point {
+  fill: var(--panel);
+  stroke: var(--accent);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-empty {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  flex-direction: column;
+  gap: 7px;
+  justify-content: center;
+  min-height: 150px;
+}
+
+.taptap-trend-empty strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.taptap-trend-footer {
+  border-top: 1px solid var(--soft);
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  padding: 11px 20px;
+}
+
 .region-matrix-panel {
   background: var(--panel);
   border: 1px solid var(--soft);
@@ -1521,6 +1685,61 @@ button:disabled {
 
   .overview-taptap-grid b {
     font-size: 21px;
+  }
+
+  .taptap-trend-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 16px 8px;
+  }
+
+  .taptap-trend-tabs {
+    overflow-x: auto;
+  }
+
+  .taptap-trend-tab {
+    flex: 1 0 auto;
+    min-height: 38px;
+  }
+
+  .taptap-trend-summary {
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px 16px 0;
+  }
+
+  .taptap-trend-current {
+    grid-column: 1 / -1;
+  }
+
+  .taptap-trend-summary > div:nth-child(2) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .taptap-trend-current strong {
+    font-size: 27px;
+  }
+
+  .taptap-trend-chart-wrap {
+    overflow-x: hidden;
+    padding: 6px 0 0;
+  }
+
+  .taptap-trend-chart {
+    min-height: 190px;
+  }
+
+  .taptap-trend-empty {
+    min-height: 130px;
+  }
+
+  .taptap-trend-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+    padding: 11px 16px;
   }
 
   .region-matrix-heading {

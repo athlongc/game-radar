@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "timezone": "Asia/Shanghai",
+  "updatedAt": "2026-07-16T22:48:43.087Z",
+  "games": {
+    "heartopia": {
+      "appId": "45213",
+      "title": "心动小镇",
+      "snapshots": [
+        {
+          "date": "2026-07-17",
+          "capturedAt": "2026-07-16T22:48:43.087Z",
+          "downloadCount": 59042547,
+          "mobileDownloadCount": 58715366,
+          "pcDownloadCount": 327181,
+          "fansCount": 38515408,
+          "reviewCount": 231503,
+          "rating": 8.7,
+          "latestScore": 8.6,
+          "latestReviewCount": 3400,
+          "latestVersionScore": 8.6,
+          "latestVersionReviewCount": 3298,
+          "version": "0.5.4",
+          "updateDate": "2026-07-09"
+        }
+      ]
+    },
+    "torchlight-infinite": {
+      "appId": "172664",
+      "title": "火炬之光：无限",
+      "snapshots": [
+        {
+          "date": "2026-07-17",
+          "capturedAt": "2026-07-16T22:48:43.087Z",
+          "downloadCount": 6060276,
+          "mobileDownloadCount": 5168986,
+          "pcDownloadCount": 891290,
+          "fansCount": 3701456,
+          "reviewCount": 24767,
+          "rating": 7.4,
+          "latestScore": 7,
+          "latestReviewCount": 184,
+          "latestVersionScore": 7.9,
+          "latestVersionReviewCount": 20,
+          "version": "16.0.0",
+          "updateDate": "2026-07-16"
+        }
+      ]
+    }
+  }
+}
