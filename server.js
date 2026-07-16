@@ -2,6 +2,9 @@ import { createHash, createHmac } from "node:crypto";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const AMAZON_CACHE_TTL_MS = 60 * 60 * 1000;
 const STEAM_TOP_SELLER_TOP_LIMIT = 100;
+const STEAM_TOP_SELLER_MAX_CONCURRENCY = 2;
+const STEAM_TOP_SELLER_MAX_ATTEMPTS = 3;
+const STEAM_TOP_SELLER_MIN_RESULT_COUNT = 20;
 const PUBLIC_DASHBOARD_ID = "heartopia";
 const APPLE_SIMULATION_GENRE_ID = "7015";
 const TORCHLIGHT_OVERSEAS_DIANDIAN_URL =
@@ -62,6 +65,13 @@ const dashboards = [
     title: "心动小镇 / Heartopia",
     subtitle: "Steam 在线与 iOS 游戏榜",
     publisher: "XD",
+    stockQuote: {
+      symbol: "2400.HK",
+      code: "hk02400",
+      label: "心动公司股价",
+      currency: "HKD",
+      externalUrl: "https://xueqiu.com/S/02400"
+    },
     steamAppId: "4025700",
     steamExternalUrl: "https://steamdb.info/app/4025700/charts/",
     steamTopSellerMarkets: [
@@ -511,6 +521,39 @@ const dashboards = [
 
 const metricsCache = new Map();
 const amazonCache = new Map();
+const steamTopSellerCache = new Map();
+const tapTapPcDownloadCache = new Map();
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createRequestLimiter(maxConcurrent) {
+  let activeCount = 0;
+  const queue = [];
+
+  function runNext() {
+    while (activeCount < maxConcurrent && queue.length) {
+      const { task, resolve, reject } = queue.shift();
+      activeCount += 1;
+      Promise.resolve()
+        .then(task)
+        .then(resolve, reject)
+        .finally(() => {
+          activeCount -= 1;
+          runNext();
+        });
+    }
+  }
+
+  return (task) =>
+    new Promise((resolve, reject) => {
+      queue.push({ task, resolve, reject });
+      runNext();
+    });
+}
+
+const limitSteamTopSellerRequest = createRequestLimiter(STEAM_TOP_SELLER_MAX_CONCURRENCY);
 
 async function fetchJson(url) {
   const controller = new AbortController();
@@ -694,13 +737,46 @@ function parseTapTapMetric(html, config) {
   };
 }
 
-async function getTapTapMetric(config) {
-  const html = await fetchText(config.url, {
-    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "user-agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+async function getTapTapPcDownloadCount(appId) {
+  if (!appId) return null;
+  const params = new URLSearchParams({
+    id: String(appId),
+    Identifier: `auto_${appId}`,
+    "X-UA":
+      "V=1&PN=WebApp&LANG=zh_CN&VN_CODE=102&LOC=CN&PLT=PC&DS=Android&UID=d52ddf3e-6028-4fa4-ba5a-56d8a7bb4729&OS=Windows&OSV=10&DT=PC"
   });
-  return parseTapTapMetric(html, config);
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const data = await fetchJson(`https://api.taptapdada.com/app/v3/detail?${params}`);
+      const count = Number(data?.data?.app?.stat?.pc_download_count ?? NaN);
+      if (!Number.isFinite(count)) throw new Error("TapTap PC download count unavailable");
+      tapTapPcDownloadCache.set(String(appId), count);
+      return count;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await delay(300);
+    }
+  }
+  if (tapTapPcDownloadCache.has(String(appId))) {
+    return tapTapPcDownloadCache.get(String(appId));
+  }
+  throw lastError;
+}
+
+async function getTapTapMetric(config) {
+  const [html, pcDownloadCount] = await Promise.all([
+    fetchText(config.url, {
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "user-agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    }),
+    getTapTapPcDownloadCount(config.appId).catch(() => null)
+  ]);
+  return {
+    ...parseTapTapMetric(html, config),
+    pcDownloadCount
+  };
 }
 
 async function getSteamMetric(appId) {
@@ -818,24 +894,53 @@ function parseSteamSearchResults(html = "") {
 async function getSteamTopSellerMarket(appId, market) {
   const country = (market.country || "global").toLowerCase();
   const searchUrl = getSteamTopSellerSearchUrl(country);
-  const data = await fetchJson(searchUrl);
-  if (data?.success !== 1) {
-    throw new Error(`Steam top sellers unavailable for ${market.displayCode || country}`);
+  const cacheKey = `${appId}:${country}`;
+  let lastError;
+
+  for (let attempt = 0; attempt < STEAM_TOP_SELLER_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const data = await limitSteamTopSellerRequest(() => fetchJson(searchUrl));
+      if (data?.success !== 1) {
+        throw new Error(`Steam top sellers unavailable for ${market.displayCode || country}`);
+      }
+      const items = parseSteamSearchResults(data.results_html || "");
+      if (items.length < STEAM_TOP_SELLER_MIN_RESULT_COUNT) {
+        throw new Error(`Steam returned only ${items.length} chart rows for ${market.displayCode || country}`);
+      }
+      const foundIndex = items.findIndex((item) => item.appId === appId);
+      const result = {
+        ...market,
+        country,
+        displayCode: market.displayCode || country.toUpperCase(),
+        rank: foundIndex >= 0 ? foundIndex + 1 : null,
+        topLimit: STEAM_TOP_SELLER_TOP_LIMIT,
+        totalCount: data.total_count ?? null,
+        leaders: items.slice(0, 5),
+        url: market.url || getFallbackSteamChartsUrl(country),
+        sourceUrl: searchUrl,
+        updatedAt: new Date().toISOString()
+      };
+      steamTopSellerCache.set(cacheKey, result);
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < STEAM_TOP_SELLER_MAX_ATTEMPTS - 1) {
+        await delay(350 * 2 ** attempt);
+      }
+    }
   }
-  const items = parseSteamSearchResults(data.results_html || "");
-  const foundIndex = items.findIndex((item) => item.appId === appId);
-  return {
-    ...market,
-    country,
-    displayCode: market.displayCode || country.toUpperCase(),
-    rank: foundIndex >= 0 ? foundIndex + 1 : null,
-    topLimit: STEAM_TOP_SELLER_TOP_LIMIT,
-    totalCount: data.total_count ?? null,
-    leaders: items.slice(0, 5),
-    url: market.url || getFallbackSteamChartsUrl(country),
-    sourceUrl: searchUrl,
-    updatedAt: new Date().toISOString()
-  };
+
+  const cached = steamTopSellerCache.get(cacheKey);
+  if (cached) {
+    return {
+      ...cached,
+      ...market,
+      stale: true,
+      checkedAt: new Date().toISOString(),
+      warning: lastError?.message || "Steam real-time refresh failed"
+    };
+  }
+  throw lastError;
 }
 
 async function getSteamTopSellers(appId, markets = []) {

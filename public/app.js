@@ -305,6 +305,7 @@ function renderRegionalGameRow(dashboard, listing, sharedIosRankUrl = "") {
   const hasError = Boolean(
     listing.lookup?.error || freeRank?.error || featuredFreeRank?.error || grossingRank?.error || steamRank?.error
   );
+  const hasStaleData = !hasError && Boolean(steamRank?.stale);
   const freeValue = freeRank ? (freeRank.error ? "暂无" : formatRank(freeRank.rank, freeRank.topLimit)) : "—";
   const grossingValue = grossingRank
     ? grossingRank.error
@@ -343,9 +344,9 @@ function renderRegionalGameRow(dashboard, listing, sharedIosRankUrl = "") {
         ${renderMatrixValue(steamValue, steamRank?.url || "", steamValue === "—" ? "region-rank-empty" : "region-rank-steam")}
       </td>
       <td class="region-status-cell" data-label="状态">
-        <span class="region-status ${hasError ? "has-error" : ""}">
+        <span class="region-status ${hasError ? "has-error" : hasStaleData ? "is-stale" : ""}">
           <span class="region-status-dot" aria-hidden="true"></span>
-          ${hasError ? "部分异常" : "监控中"}
+          ${hasError ? "部分异常" : hasStaleData ? "缓存值" : "监控中"}
         </span>
       </td>
     </tr>
@@ -358,7 +359,7 @@ function renderSteamOverviewCard({ editionLabel = "", steam, reviews, url = "", 
       ? `<div class="overview-steam-global">
           <div>
             <strong>${escapeHtml(topSellerLabel || `${editionLabel}全球畅销`)}</strong>
-            <span>${escapeHtml(globalSteam.displayCode || "Global")}</span>
+            <span>${escapeHtml(globalSteam.displayCode || "Global")}${globalSteam.stale ? " · 缓存值" : ""}</span>
           </div>
           <b>${escapeHtml(formatSteamTopSellerRank(globalSteam))}</b>
         </div>`
@@ -372,7 +373,7 @@ function renderSteamOverviewCard({ editionLabel = "", steam, reviews, url = "", 
     : `<div class="overview-steam-global">
         <div>
           <strong>Steam 全球畅销</strong>
-          <span>${escapeHtml(globalSteam?.displayCode || "Global")}</span>
+          <span>${escapeHtml(globalSteam?.displayCode || "Global")}${globalSteam?.stale ? " · 缓存值" : ""}</span>
         </div>
         <b>${escapeHtml(formatSteamTopSellerRank(globalSteam))}</b>
       </div>`;
@@ -462,6 +463,7 @@ function renderRegionalGameSummary(dashboard) {
           ? `<div class="overview-value outside">暂无</div><div class="metric-note">${escapeHtml(tapTap.error)}</div>`
           : `<div class="overview-taptap-grid">
               <div><b>${formatWan(tapTap.downloadCount)}</b><span>总下载量</span></div>
+              <div><b>${formatWan(tapTap.pcDownloadCount)}</b><span>PC 下载量</span></div>
               <div><b>${tapTap.rating == null ? "暂无" : escapeHtml(tapTap.rating)}</b><span>${tapTap.ratingCount == null ? "评分" : `${formatWan(tapTap.ratingCount)}评分`}</span></div>
               <div><b>${escapeHtml(tapTap.downloadRank || "暂无")}</b><span>热门下载榜</span></div>
             </div>`
@@ -576,6 +578,7 @@ function renderSummary(dashboard) {
       type: "taptap",
       label: dashboard.tapTap.label || "TapTap",
       downloads: formatWan(dashboard.tapTap.downloadCount),
+      pcDownloads: formatWan(dashboard.tapTap.pcDownloadCount),
       rating: dashboard.tapTap.rating == null ? "暂无" : `${dashboard.tapTap.rating}`,
       rank: dashboard.tapTap.downloadRank || "暂无",
       note: dashboard.tapTap.ratingCount == null ? "评分" : `${formatWan(dashboard.tapTap.ratingCount)}评分`,
@@ -654,6 +657,10 @@ function renderSummary(dashboard) {
                   <div>
                     <div class="taptap-value">${escapeHtml(card.downloads)}</div>
                     <div class="metric-note">总下载量</div>
+                  </div>
+                  <div>
+                    <div class="taptap-value">${escapeHtml(card.pcDownloads)}</div>
+                    <div class="metric-note">PC 下载量</div>
                   </div>
                   <div>
                     <div class="taptap-value">${escapeHtml(card.rating)}</div>
