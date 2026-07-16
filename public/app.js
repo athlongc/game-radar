@@ -340,7 +340,7 @@ function renderTapTapTrend(dashboard) {
       </div>
       <div class="taptap-trend-chart-wrap">${renderTapTapTrendChart(dashboard, snapshots, metric)}</div>
       <div class="taptap-trend-footer">
-        <span>每天北京时间 00:00 自动采集</span>
+        <span>每天北京时间 00:07 自动采集</span>
         <span>${snapshots.length ? `最近 ${snapshots.length} 个日快照` : "历史数据尚未生成"}</span>
       </div>
     </section>

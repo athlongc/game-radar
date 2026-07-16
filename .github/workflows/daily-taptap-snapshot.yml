@@ -2,8 +2,8 @@ name: Daily TapTap snapshot
 
 on:
   schedule:
-    # GitHub Actions cron uses UTC. 16:00 UTC is 00:00 the next day in Shanghai.
-    - cron: "0 16 * * *"
+    # GitHub Actions cron uses UTC. 16:07 UTC is 00:07 the next day in Shanghai.
+    - cron: "7 16 * * *"
   workflow_dispatch:
 
 permissions:
