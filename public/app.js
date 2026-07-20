@@ -48,6 +48,7 @@ const TAPTAP_TREND_METRICS = [
 let currentMetrics = null;
 let tapTapHistory = { games: {} };
 let selectedTapTapMetric = "pcDownloadCount";
+let lockedTapTapSnapshotDate = "";
 
 function isLocalHost() {
   return location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "::1";
@@ -221,7 +222,15 @@ function getTapTapTrendSnapshots(dashboardId) {
     .slice(-60);
 }
 
-function renderTapTapTrendChart(dashboard, snapshots, metric) {
+function getTapTapTrendTickIndexes(snapshotCount) {
+  if (snapshotCount <= 10) {
+    return Array.from({ length: snapshotCount }, (_, index) => index);
+  }
+  const lastIndex = snapshotCount - 1;
+  return [...new Set(Array.from({ length: 7 }, (_, index) => Math.round((lastIndex * index) / 6)))];
+}
+
+function renderTapTapTrendChart(dashboard, snapshots, metric, selectedIndex, showTooltip) {
   const values = snapshots.map((snapshot) => Number(snapshot[metric.key]));
   if (!values.length || values.some((value) => !Number.isFinite(value))) {
     return `<div class="taptap-trend-empty">历史数据将在每日采集后显示</div>`;
@@ -259,11 +268,59 @@ function renderTapTapTrendChart(dashboard, snapshots, metric) {
     top + chartHeight
   } Z`;
   const gridValues = [yMax, yMin + (yMax - yMin) / 2, yMin];
-  const tickIndexes = [...new Set([0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1])];
+  const tickIndexes = getTapTapTrendTickIndexes(snapshots.length);
   const chartId = `taptapTrendChart-${dashboard.id}-${metric.key}`;
+  const selectedPoint = points[selectedIndex];
+  const selectedSnapshot = snapshots[selectedIndex];
+  const selectedValue = values[selectedIndex];
+  const selectedPreviousValue = selectedIndex > 0 ? values[selectedIndex - 1] : null;
+  const selectedDailyDelta = Number.isFinite(selectedPreviousValue) ? selectedValue - selectedPreviousValue : null;
+  const selectedComparisonIndex = selectedIndex > 7 ? selectedIndex - 7 : 0;
+  const selectedPeriodDelta =
+    selectedIndex > 0 && Number.isFinite(values[selectedComparisonIndex])
+      ? selectedValue - values[selectedComparisonIndex]
+      : null;
+  const tooltipWidth = 190;
+  const tooltipHeight = 54;
+  const getTooltipX = (point) => Math.min(Math.max(point.x - tooltipWidth / 2, left + 6), width - right - tooltipWidth);
+  const getTooltipY = (point) => Math.max(7, point.y - tooltipHeight - 14);
+  const getHitZoneStart = (index) =>
+    index === 0 ? left : (xForIndex(index - 1) + xForIndex(index)) / 2;
+  const getHitZoneEnd = (index) =>
+    index === snapshots.length - 1 ? width - right : (xForIndex(index) + xForIndex(index + 1)) / 2;
+
+  const renderTrendTarget = (snapshot, index) => {
+    const value = values[index];
+    const previousValue = index > 0 ? values[index - 1] : null;
+    const dailyDelta = Number.isFinite(previousValue) ? value - previousValue : null;
+    const comparisonIndex = index > 7 ? index - 7 : 0;
+    const periodDelta =
+      index > 0 && Number.isFinite(values[comparisonIndex]) ? value - values[comparisonIndex] : null;
+    const periodLabel = index > 7 ? "近 7 日" : "阶段变化";
+    const point = points[index];
+    const hitStart = getHitZoneStart(index);
+    const hitEnd = getHitZoneEnd(index);
+    const ariaDelta = dailyDelta === null ? "无前一日数据" : `较前一日 ${formatTapTapTrendDelta(dailyDelta, metric)}`;
+
+    return `<rect class="taptap-trend-hit-zone" x="${hitStart}" y="${top}" width="${Math.max(
+      hitEnd - hitStart,
+      1
+    )}" height="${chartHeight}" tabindex="0" role="button"
+      aria-label="${escapeHtml(snapshot.date)}，${escapeHtml(metric.label)} ${escapeHtml(
+        formatTapTapTrendValue(value, metric)
+      )}，${escapeHtml(ariaDelta)}。点击固定此日期"
+      data-taptap-trend-point data-date="${escapeHtml(snapshot.date)}"
+      data-value="${escapeHtml(formatTapTapTrendValue(value, metric))}"
+      data-daily-delta="${escapeHtml(formatTapTapTrendDelta(dailyDelta, metric))}"
+      data-period-label="${periodLabel}"
+      data-period-delta="${escapeHtml(formatTapTapTrendDelta(periodDelta, metric))}"
+      data-point-x="${point.x}" data-point-y="${point.y}"
+      data-tooltip-x="${getTooltipX(point)}" data-tooltip-y="${getTooltipY(point)}"
+      data-is-latest="${index === snapshots.length - 1}"></rect>`;
+  };
 
   return `
-    <svg class="taptap-trend-chart" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${chartId}-title ${chartId}-desc">
+    <svg class="taptap-trend-chart" viewBox="0 0 ${width} ${height}" role="group" aria-labelledby="${chartId}-title ${chartId}-desc">
       <title id="${chartId}-title">${escapeHtml(dashboard.title)} ${escapeHtml(metric.label)}趋势</title>
       <desc id="${chartId}-desc">从 ${escapeHtml(snapshots[0].date)} 到 ${escapeHtml(
         snapshots.at(-1).date
@@ -279,7 +336,14 @@ function renderTapTapTrendChart(dashboard, snapshots, metric) {
         .join("")}
       <path class="taptap-trend-area" d="${areaPath}"></path>
       <path class="taptap-trend-line" d="${linePath}"></path>
-      <circle class="taptap-trend-point" cx="${points.at(-1).x}" cy="${points.at(-1).y}" r="5"></circle>
+      ${points
+        .map(
+          (point, index) =>
+            `<circle class="taptap-trend-point ${index === selectedIndex ? "is-selected" : ""}" data-taptap-trend-visible-point data-date="${escapeHtml(
+              snapshots[index].date
+            )}" cx="${point.x}" cy="${point.y}" r="${index === selectedIndex ? 5 : 3.25}"></circle>`
+        )
+        .join("")}
       ${tickIndexes
         .map(
           (index) =>
@@ -288,6 +352,27 @@ function renderTapTapTrendChart(dashboard, snapshots, metric) {
             )}</text>`
         )
         .join("")}
+      <g class="taptap-trend-guide ${showTooltip ? "is-visible" : ""}" data-taptap-trend-guide aria-hidden="true">
+        <line class="taptap-trend-guide-line" data-taptap-trend-guide-line x1="${selectedPoint.x}" y1="${top}" x2="${selectedPoint.x}" y2="${
+          top + chartHeight
+        }"></line>
+        <circle class="taptap-trend-guide-point" data-taptap-trend-guide-point cx="${selectedPoint.x}" cy="${selectedPoint.y}" r="6"></circle>
+        <g class="taptap-trend-tooltip" data-taptap-trend-tooltip transform="translate(${getTooltipX(
+          selectedPoint
+        )} ${getTooltipY(selectedPoint)})">
+          <rect width="${tooltipWidth}" height="${tooltipHeight}" rx="8"></rect>
+          <text class="taptap-trend-tooltip-date" data-taptap-trend-tooltip-date x="12" y="18">${escapeHtml(
+            selectedSnapshot.date
+          )}</text>
+          <text class="taptap-trend-tooltip-value" data-taptap-trend-tooltip-value x="12" y="40">${escapeHtml(
+            formatTapTapTrendValue(selectedValue, metric)
+          )}</text>
+          <text class="taptap-trend-tooltip-delta" data-taptap-trend-tooltip-delta x="178" y="39" text-anchor="end">${escapeHtml(
+            formatTapTapTrendDelta(selectedDailyDelta, metric)
+          )}</text>
+        </g>
+      </g>
+      ${snapshots.map(renderTrendTarget).join("")}
     </svg>
   `;
 }
@@ -295,16 +380,20 @@ function renderTapTapTrendChart(dashboard, snapshots, metric) {
 function renderTapTapTrend(dashboard) {
   const snapshots = getTapTapTrendSnapshots(dashboard.id);
   const metric = TAPTAP_TREND_METRICS.find((item) => item.key === selectedTapTapMetric) || TAPTAP_TREND_METRICS[0];
-  const latest = snapshots.at(-1);
-  const previous = snapshots.at(-2);
-  const comparison = snapshots.length > 7 ? snapshots.at(-8) : snapshots[0];
-  const currentValue = latest ? Number(latest[metric.key]) : null;
+  const lockedIndex = snapshots.findIndex((snapshot) => snapshot.date === lockedTapTapSnapshotDate);
+  const selectedIndex = lockedIndex >= 0 ? lockedIndex : Math.max(snapshots.length - 1, 0);
+  const selected = snapshots[selectedIndex];
+  const previous = selectedIndex > 0 ? snapshots[selectedIndex - 1] : null;
+  const comparisonIndex = selectedIndex > 7 ? selectedIndex - 7 : 0;
+  const comparison = snapshots[comparisonIndex];
+  const currentValue = selected ? Number(selected[metric.key]) : null;
   const previousValue = previous ? Number(previous[metric.key]) : null;
-  const comparisonValue = snapshots.length > 1 && comparison ? Number(comparison[metric.key]) : null;
+  const comparisonValue = selectedIndex > 0 && comparison ? Number(comparison[metric.key]) : null;
   const dailyDelta = Number.isFinite(currentValue) && Number.isFinite(previousValue) ? currentValue - previousValue : null;
   const periodDelta =
     Number.isFinite(currentValue) && Number.isFinite(comparisonValue) ? currentValue - comparisonValue : null;
-  const periodLabel = snapshots.length > 7 ? "近 7 日" : "阶段变化";
+  const periodLabel = selectedIndex > 7 ? "近 7 日" : "阶段变化";
+  const isLocked = lockedIndex >= 0;
 
   return `
     <section class="taptap-trend-panel" aria-labelledby="tapTapTrendTitle-${escapeHtml(dashboard.id)}">
@@ -325,23 +414,29 @@ function renderTapTapTrend(dashboard) {
       </div>
       <div class="taptap-trend-summary">
         <div class="taptap-trend-current">
-          <span>当前${escapeHtml(metric.label)}</span>
-          <strong>${formatTapTapTrendValue(currentValue, metric)}</strong>
-          <small>${latest ? `快照 ${escapeHtml(latest.date)}` : "等待首次采集"}</small>
+          <span data-taptap-summary-current-label>${escapeHtml(metric.label)}</span>
+          <strong data-taptap-summary-current-value>${formatTapTapTrendValue(currentValue, metric)}</strong>
+          <small data-taptap-summary-current-date>${selected ? `快照 ${escapeHtml(selected.date)}` : "等待首次采集"}</small>
         </div>
         <div>
           <span>较前一日</span>
-          <strong>${formatTapTapTrendDelta(dailyDelta, metric)}</strong>
+          <strong data-taptap-summary-daily-delta>${formatTapTapTrendDelta(dailyDelta, metric)}</strong>
         </div>
         <div>
-          <span>${periodLabel}</span>
-          <strong>${formatTapTapTrendDelta(periodDelta, metric)}</strong>
+          <span data-taptap-summary-period-label>${periodLabel}</span>
+          <strong data-taptap-summary-period-delta>${formatTapTapTrendDelta(periodDelta, metric)}</strong>
         </div>
       </div>
-      <div class="taptap-trend-chart-wrap">${renderTapTapTrendChart(dashboard, snapshots, metric)}</div>
+      <div class="taptap-trend-chart-wrap">${renderTapTapTrendChart(
+        dashboard,
+        snapshots,
+        metric,
+        selectedIndex,
+        isLocked
+      )}</div>
       <div class="taptap-trend-footer">
         <span>每天北京时间 00:07 自动采集</span>
-        <span>${snapshots.length ? `最近 ${snapshots.length} 个日快照` : "历史数据尚未生成"}</span>
+        <span>${snapshots.length ? `悬停查看 · 点击固定 · 最近 ${snapshots.length} 个日快照` : "历史数据尚未生成"}</span>
       </div>
     </section>
   `;
@@ -1301,7 +1396,113 @@ function getAmazonTargetCard(event) {
   return target?.closest("[data-amazon-target]") || null;
 }
 
+function getTapTapTrendTarget(event) {
+  return event.target instanceof Element ? event.target.closest("[data-taptap-trend-point]") : null;
+}
+
+function findTapTapTrendTarget(panel, date) {
+  return [...panel.querySelectorAll("[data-taptap-trend-point]")].find(
+    (target) => target.dataset.date === date
+  );
+}
+
+function updateTapTapTrendSelection(target, { showTooltip = true } = {}) {
+  const panel = target.closest(".taptap-trend-panel");
+  if (!panel) return;
+
+  const date = target.dataset.date || "";
+  const setText = (selector, value) => {
+    const element = panel.querySelector(selector);
+    if (element) element.textContent = value;
+  };
+
+  setText("[data-taptap-summary-current-value]", target.dataset.value || "暂无");
+  setText("[data-taptap-summary-current-date]", date ? `快照 ${date}` : "等待首次采集");
+  setText("[data-taptap-summary-daily-delta]", target.dataset.dailyDelta || "待积累");
+  setText("[data-taptap-summary-period-label]", target.dataset.periodLabel || "阶段变化");
+  setText("[data-taptap-summary-period-delta]", target.dataset.periodDelta || "待积累");
+
+  panel.querySelectorAll("[data-taptap-trend-visible-point]").forEach((point) => {
+    const isSelected = point.dataset.date === date;
+    point.classList.toggle("is-selected", isSelected);
+    point.setAttribute("r", isSelected ? "5" : "3.25");
+  });
+
+  const guide = panel.querySelector("[data-taptap-trend-guide]");
+  const guideLine = panel.querySelector("[data-taptap-trend-guide-line]");
+  const guidePoint = panel.querySelector("[data-taptap-trend-guide-point]");
+  const tooltip = panel.querySelector("[data-taptap-trend-tooltip]");
+  const pointX = target.dataset.pointX;
+  const pointY = target.dataset.pointY;
+
+  if (guide && guideLine && guidePoint && tooltip && pointX && pointY) {
+    guide.classList.toggle("is-visible", showTooltip);
+    guide.setAttribute("aria-hidden", showTooltip ? "false" : "true");
+    guideLine.setAttribute("x1", pointX);
+    guideLine.setAttribute("x2", pointX);
+    guidePoint.setAttribute("cx", pointX);
+    guidePoint.setAttribute("cy", pointY);
+    tooltip.setAttribute(
+      "transform",
+      `translate(${target.dataset.tooltipX || 0} ${target.dataset.tooltipY || 0})`
+    );
+    setText("[data-taptap-trend-tooltip-date]", date);
+    setText("[data-taptap-trend-tooltip-value]", target.dataset.value || "暂无");
+    setText("[data-taptap-trend-tooltip-delta]", target.dataset.dailyDelta || "待积累");
+  }
+}
+
+function restoreTapTapTrendSelection(panel) {
+  const lockedTarget = lockedTapTapSnapshotDate
+    ? findTapTapTrendTarget(panel, lockedTapTapSnapshotDate)
+    : null;
+  const latestTarget = [...panel.querySelectorAll("[data-taptap-trend-point]")].find(
+    (target) => target.dataset.isLatest === "true"
+  );
+  const target = lockedTarget || latestTarget;
+  if (target) updateTapTapTrendSelection(target, { showTooltip: Boolean(lockedTarget) });
+}
+
+function toggleTapTapTrendLock(target) {
+  const date = target.dataset.date || "";
+  lockedTapTapSnapshotDate = lockedTapTapSnapshotDate === date ? "" : date;
+  if (currentMetrics) render(currentMetrics);
+}
+
+summaryEl.addEventListener("pointerover", (event) => {
+  const target = getTapTapTrendTarget(event);
+  if (target) updateTapTapTrendSelection(target);
+});
+
+summaryEl.addEventListener("pointerout", (event) => {
+  const target = getTapTapTrendTarget(event);
+  if (!target) return;
+  const panel = target.closest(".taptap-trend-panel");
+  const relatedTarget = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-taptap-trend-point]") : null;
+  if (relatedTarget && relatedTarget.closest(".taptap-trend-panel") === panel) return;
+  if (panel) restoreTapTapTrendSelection(panel);
+});
+
+summaryEl.addEventListener("focusin", (event) => {
+  const target = getTapTapTrendTarget(event);
+  if (target) updateTapTapTrendSelection(target);
+});
+
+summaryEl.addEventListener("focusout", (event) => {
+  const target = getTapTapTrendTarget(event);
+  if (!target) return;
+  const panel = target.closest(".taptap-trend-panel");
+  const relatedTarget = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-taptap-trend-point]") : null;
+  if (relatedTarget && relatedTarget.closest(".taptap-trend-panel") === panel) return;
+  if (panel) restoreTapTapTrendSelection(panel);
+});
+
 summaryEl.addEventListener("click", (event) => {
+  const trendTarget = getTapTapTrendTarget(event);
+  if (trendTarget) {
+    toggleTapTapTrendLock(trendTarget);
+    return;
+  }
   const trendButton = event.target instanceof Element ? event.target.closest("[data-taptap-trend-metric]") : null;
   if (trendButton) {
     selectedTapTapMetric = trendButton.dataset.taptapTrendMetric || "pcDownloadCount";
@@ -1314,6 +1515,17 @@ summaryEl.addEventListener("click", (event) => {
 });
 
 summaryEl.addEventListener("keydown", (event) => {
+  const trendTarget = getTapTapTrendTarget(event);
+  if (trendTarget && (event.key === "Enter" || event.key === " ")) {
+    event.preventDefault();
+    toggleTapTapTrendLock(trendTarget);
+    return;
+  }
+  if (event.key === "Escape" && lockedTapTapSnapshotDate) {
+    lockedTapTapSnapshotDate = "";
+    if (currentMetrics) render(currentMetrics);
+    return;
+  }
   if (event.key !== "Enter" && event.key !== " ") return;
   const card = getAmazonTargetCard(event);
   if (!card) return;

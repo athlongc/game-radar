@@ -454,8 +454,79 @@ button:disabled {
 .taptap-trend-point {
   fill: var(--panel);
   stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-point.is-selected {
+  stroke-width: 3;
+}
+
+.taptap-trend-hit-zone {
+  cursor: crosshair;
+  fill: transparent;
+  pointer-events: all;
+  stroke: transparent;
+  stroke-width: 1;
+}
+
+.taptap-trend-hit-zone:focus-visible {
+  fill: rgba(14, 124, 134, 0.035);
+  outline: none;
+  stroke: rgba(14, 124, 134, 0.28);
+}
+
+.taptap-trend-guide {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.taptap-trend-guide.is-visible {
+  opacity: 1;
+}
+
+.taptap-trend-guide-line {
+  stroke: rgba(14, 124, 134, 0.42);
+  stroke-dasharray: 4 4;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-guide-point {
+  fill: var(--panel);
+  stroke: var(--accent);
   stroke-width: 3;
   vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-tooltip rect {
+  fill: var(--panel);
+  stroke: #d9dee6;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-tooltip text {
+  font-variant-numeric: tabular-nums;
+}
+
+.taptap-trend-tooltip-date {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.taptap-trend-tooltip-value {
+  fill: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.taptap-trend-tooltip-delta {
+  fill: var(--accent);
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .taptap-trend-empty {
