@@ -208,6 +208,14 @@ function formatTapTapTrendDelta(value, metric) {
   return `${prefix}${formatNumber(number)}`;
 }
 
+function formatTapTapTrendDeltaCompact(value, metric) {
+  if (!Number.isFinite(Number(value))) return "暂无";
+  const number = Number(value);
+  const prefix = number > 0 ? "+" : "";
+  if (metric.kind === "score") return `${prefix}${number.toFixed(1)}`;
+  return `${prefix}${formatWan(number)}`;
+}
+
 function formatTapTapSnapshotDate(value = "") {
   const [, month = "", day = ""] = String(value).split("-");
   return month && day ? `${month}/${day}` : String(value);
@@ -245,7 +253,7 @@ function renderTapTapTrendChart(dashboard, snapshots, metric, selectedIndex, sho
   const width = 960;
   const height = 250;
   const left = 72;
-  const right = 26;
+  const right = metric.kind === "count" ? 68 : 26;
   const top = 22;
   const bottom = 42;
   const chartWidth = width - left - right;
@@ -260,6 +268,24 @@ function renderTapTapTrendChart(dashboard, snapshots, metric, selectedIndex, sho
     snapshots.length === 1 ? left + chartWidth / 2 : left + (chartWidth * index) / (snapshots.length - 1);
   const yForValue = (value) => top + ((yMax - value) / (yMax - yMin)) * chartHeight;
   const points = values.map((value, index) => ({ x: xForIndex(index), y: yForValue(value) }));
+  const dailyDeltas = values.map((value, index) => (index > 0 ? value - values[index - 1] : null));
+  const finiteDailyDeltas = dailyDeltas.filter((value) => Number.isFinite(value));
+  const showDailyBars = metric.kind === "count" && finiteDailyDeltas.length > 0;
+  const dailyMin = showDailyBars ? Math.min(0, ...finiteDailyDeltas) : 0;
+  const dailyMax = showDailyBars ? Math.max(0, ...finiteDailyDeltas) : 0;
+  const dailyRange = Math.max(dailyMax - dailyMin, 1);
+  const dailyYMin = dailyMin < 0 ? dailyMin - dailyRange * 0.08 : 0;
+  const dailyYMax = dailyMax > 0 ? dailyMax + dailyRange * 0.12 : 1;
+  const yForDailyDelta = (value) =>
+    top + ((dailyYMax - value) / (dailyYMax - dailyYMin)) * chartHeight;
+  const dailyZeroY = yForDailyDelta(0);
+  const xStep = snapshots.length > 1 ? chartWidth / (snapshots.length - 1) : chartWidth;
+  const dailyBarWidth = Math.max(7, Math.min(18, xStep * 0.38));
+  const dailyGridValues = showDailyBars
+    ? dailyMin < 0
+      ? [dailyMax, 0, dailyMin]
+      : [dailyMax, dailyMax / 2, 0]
+    : [];
   const linePath =
     points.length === 1
       ? `M ${points[0].x - 10} ${points[0].y} L ${points[0].x + 10} ${points[0].y}`
@@ -324,7 +350,9 @@ function renderTapTapTrendChart(dashboard, snapshots, metric, selectedIndex, sho
       <title id="${chartId}-title">${escapeHtml(dashboard.title)} ${escapeHtml(metric.label)}趋势</title>
       <desc id="${chartId}-desc">从 ${escapeHtml(snapshots[0].date)} 到 ${escapeHtml(
         snapshots.at(-1).date
-      )} 的每日零点快照，共 ${snapshots.length} 条。</desc>
+      )} 的每日零点快照，共 ${snapshots.length} 条。${
+        showDailyBars ? "折线表示累计值，柱形表示单日新增。" : ""
+      }</desc>
       ${gridValues
         .map((value) => {
           const y = yForValue(value);
@@ -334,7 +362,38 @@ function renderTapTapTrendChart(dashboard, snapshots, metric, selectedIndex, sho
             )}</text>`;
         })
         .join("")}
+      ${
+        showDailyBars
+          ? dailyGridValues
+              .map((value) => {
+                const y = yForDailyDelta(value);
+                return `<text class="taptap-trend-axis-label taptap-trend-axis-label-daily" x="${
+                  width - right + 12
+                }" y="${y + 4}" text-anchor="start">${escapeHtml(
+                  formatTapTapTrendDeltaCompact(value, metric)
+                )}</text>`;
+              })
+              .join("")
+          : ""
+      }
       <path class="taptap-trend-area" d="${areaPath}"></path>
+      ${
+        showDailyBars
+          ? dailyDeltas
+              .map((value, index) => {
+                if (!Number.isFinite(value)) return "";
+                const deltaY = yForDailyDelta(value);
+                const barY = Math.min(deltaY, dailyZeroY);
+                const barHeight = Math.max(Math.abs(dailyZeroY - deltaY), 1);
+                return `<rect class="taptap-trend-daily-bar ${
+                  index === selectedIndex ? "is-selected" : ""
+                }" data-taptap-trend-daily-bar data-date="${escapeHtml(
+                  snapshots[index].date
+                )}" x="${points[index].x - dailyBarWidth / 2}" y="${barY}" width="${dailyBarWidth}" height="${barHeight}" rx="3"></rect>`;
+              })
+              .join("")
+          : ""
+      }
       <path class="taptap-trend-line" d="${linePath}"></path>
       ${points
         .map(
@@ -352,6 +411,18 @@ function renderTapTapTrendChart(dashboard, snapshots, metric, selectedIndex, sho
             )}</text>`
         )
         .join("")}
+      ${
+        showDailyBars
+          ? `<g class="taptap-trend-legend ${
+              showTooltip ? "is-hidden" : ""
+            }" data-taptap-trend-legend transform="translate(${width - right - 178} ${top + 4})" aria-hidden="true">
+              <line class="taptap-trend-legend-line" x1="0" y1="5" x2="18" y2="5"></line>
+              <text x="25" y="9">累计</text>
+              <rect class="taptap-trend-legend-bar" x="76" y="0" width="10" height="10" rx="2"></rect>
+              <text x="93" y="9">单日新增</text>
+            </g>`
+          : ""
+      }
       <g class="taptap-trend-guide ${showTooltip ? "is-visible" : ""}" data-taptap-trend-guide aria-hidden="true">
         <line class="taptap-trend-guide-line" data-taptap-trend-guide-line x1="${selectedPoint.x}" y1="${top}" x2="${selectedPoint.x}" y2="${
           top + chartHeight
@@ -368,7 +439,7 @@ function renderTapTapTrendChart(dashboard, snapshots, metric, selectedIndex, sho
             formatTapTapTrendValue(selectedValue, metric)
           )}</text>
           <text class="taptap-trend-tooltip-delta" data-taptap-trend-tooltip-delta x="178" y="39" text-anchor="end">${escapeHtml(
-            formatTapTapTrendDelta(selectedDailyDelta, metric)
+            `${showDailyBars ? "新增 " : ""}${formatTapTapTrendDelta(selectedDailyDelta, metric)}`
           )}</text>
         </g>
       </g>
@@ -419,7 +490,7 @@ function renderTapTapTrend(dashboard) {
           <small data-taptap-summary-current-date>${selected ? `快照 ${escapeHtml(selected.date)}` : "等待首次采集"}</small>
         </div>
         <div>
-          <span>较前一日</span>
+          <span>${metric.kind === "count" ? "单日新增" : "较前一日"}</span>
           <strong data-taptap-summary-daily-delta>${formatTapTapTrendDelta(dailyDelta, metric)}</strong>
         </div>
         <div>
@@ -1427,11 +1498,15 @@ function updateTapTapTrendSelection(target, { showTooltip = true } = {}) {
     point.classList.toggle("is-selected", isSelected);
     point.setAttribute("r", isSelected ? "5" : "3.25");
   });
+  panel.querySelectorAll("[data-taptap-trend-daily-bar]").forEach((bar) => {
+    bar.classList.toggle("is-selected", bar.dataset.date === date);
+  });
 
   const guide = panel.querySelector("[data-taptap-trend-guide]");
   const guideLine = panel.querySelector("[data-taptap-trend-guide-line]");
   const guidePoint = panel.querySelector("[data-taptap-trend-guide-point]");
   const tooltip = panel.querySelector("[data-taptap-trend-tooltip]");
+  const legend = panel.querySelector("[data-taptap-trend-legend]");
   const pointX = target.dataset.pointX;
   const pointY = target.dataset.pointY;
 
@@ -1448,7 +1523,13 @@ function updateTapTapTrendSelection(target, { showTooltip = true } = {}) {
     );
     setText("[data-taptap-trend-tooltip-date]", date);
     setText("[data-taptap-trend-tooltip-value]", target.dataset.value || "暂无");
-    setText("[data-taptap-trend-tooltip-delta]", target.dataset.dailyDelta || "待积累");
+    setText(
+      "[data-taptap-trend-tooltip-delta]",
+      `${panel.querySelector("[data-taptap-trend-daily-bar]") ? "新增 " : ""}${
+        target.dataset.dailyDelta || "待积累"
+      }`
+    );
+    if (legend) legend.classList.toggle("is-hidden", showTooltip);
   }
 }
 

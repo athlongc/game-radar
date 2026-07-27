@@ -438,8 +438,24 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.taptap-trend-axis-label-daily {
+  fill: #71809a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .taptap-trend-area {
   fill: rgba(14, 124, 134, 0.08);
+}
+
+.taptap-trend-daily-bar {
+  fill: rgba(105, 123, 153, 0.28);
+  pointer-events: none;
+  transition: fill 0.12s ease, opacity 0.12s ease;
+}
+
+.taptap-trend-daily-bar.is-selected {
+  fill: rgba(78, 98, 132, 0.72);
 }
 
 .taptap-trend-line {
@@ -524,9 +540,35 @@ button:disabled {
 }
 
 .taptap-trend-tooltip-delta {
-  fill: var(--accent);
+  fill: #5d6f8f;
   font-size: 11px;
   font-weight: 900;
+}
+
+.taptap-trend-legend text {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.taptap-trend-legend {
+  opacity: 1;
+  transition: opacity 0.12s ease;
+}
+
+.taptap-trend-legend.is-hidden {
+  opacity: 0;
+}
+
+.taptap-trend-legend-line {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.taptap-trend-legend-bar {
+  fill: rgba(105, 123, 153, 0.55);
 }
 
 .taptap-trend-empty {
