@@ -1,7 +1,7 @@
 import { getMetrics } from "../../../server.js";
 
 export const dynamic = "force-dynamic";
-const PUBLIC_DASHBOARD_IDS = ["heartopia", "torchlight-infinite"];
+const PUBLIC_DASHBOARD_IDS = ["heartopia", "torchlight-infinite", "shiji-huatong"];
 
 export async function GET(request: Request) {
   try {

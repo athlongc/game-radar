@@ -10,6 +10,7 @@ const APPLE_SIMULATION_GENRE_ID = "7015";
 const TORCHLIGHT_OVERSEAS_DIANDIAN_URL =
   "https://app.diandian.com/app/nw2uwuzze0jwdfr/ios-grank?market=1&country=125&system=4&id=1593130084&n=火炬之光：無限";
 const TORCHLIGHT_CN_QIMAI_URL = "https://www.qimai.cn/app/rank/appid/1528917194/country/cn";
+const TASTY_TRAVELS_APPMAGIC_URL = "https://appmagic.rocks/iphone/tasty-travels-merge-game/6471045672";
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
 const NAVIMOW_NEWSROOM_URL = "https://navimow.com/blogs/newsroom";
 const NAVIMOW_NEWSROOM_ATOM_URL = "https://navimow.com/blogs/newsroom.atom";
@@ -281,6 +282,61 @@ const dashboards = [
           }
         ).map((chart) => ({ ...chart, externalUrl: TORCHLIGHT_OVERSEAS_DIANDIAN_URL }))
       }))
+    ]
+  },
+  {
+    id: "shiji-huatong",
+    title: "世纪华通",
+    subtitle: "四款游戏 · 12 大市场 iOS 游戏畅销榜",
+    publisher: "世纪华通 / Century Games",
+    layout: "gamePortfolio",
+    portfolioMarkets: [
+      { country: "us", label: "美国" },
+      { country: "cn", label: "中国" },
+      { country: "jp", label: "日本" },
+      { country: "kr", label: "韩国" },
+      { country: "de", label: "德国" },
+      { country: "gb", label: "英国" },
+      { country: "ca", label: "加拿大" },
+      { country: "tw", label: "台湾" },
+      { country: "fr", label: "法国" },
+      { country: "au", label: "澳大利亚" },
+      { country: "br", label: "巴西" },
+      { country: "it", label: "意大利" }
+    ],
+    portfolioGames: [
+      {
+        id: "whiteout-survival",
+        title: "无尽冬日",
+        internationalTitle: "Whiteout Survival",
+        appId: "6443575749",
+        appIds: { cn: "6478492012" },
+        lookupCountry: "us"
+      },
+      {
+        id: "kingshot",
+        title: "奔奔王国",
+        internationalTitle: "Kingshot",
+        appId: "6739554056",
+        appIds: { cn: "6748527570" },
+        lookupCountry: "us"
+      },
+      {
+        id: "tasty-travels",
+        title: "Tasty Travels: Merge Game",
+        internationalTitle: "Merge and Explore",
+        appId: "6471045672",
+        lookupCountry: "us",
+        externalUrl: TASTY_TRAVELS_APPMAGIC_URL,
+        externalLabel: "AppMagic"
+      },
+      {
+        id: "hotel-journey",
+        title: "飯店奇旅",
+        internationalTitle: "Merge & Makeover",
+        appId: "6752886832",
+        lookupCountry: "us"
+      }
     ]
   },
   {
@@ -1230,6 +1286,74 @@ async function getAppleRanks(appId, country, charts) {
   return charts.map((chart) => chart.rank);
 }
 
+function getPortfolioGameAppId(game, country) {
+  return game.appIds?.[country] || game.appId;
+}
+
+async function getAppleGamePortfolio(dashboard) {
+  const markets = dashboard.portfolioMarkets || [];
+  const games = dashboard.portfolioGames || [];
+  const marketFeeds = await Promise.all(
+    markets.map(async (market) => {
+      const chart = {
+        feed: "topgrossingapplications",
+        genre: "6014"
+      };
+      try {
+        const data = await fetchJson(getAppleChartUrl(market.country, chart));
+        return {
+          ...market,
+          entries: parseLegacyAppleFeed(data?.feed),
+          updatedAt: data?.feed?.updated?.label || ""
+        };
+      } catch (error) {
+        return {
+          ...market,
+          entries: [],
+          updatedAt: "",
+          error: error.message || "Chart unavailable"
+        };
+      }
+    })
+  );
+  const lookups = await Promise.all(
+    games.map((game) =>
+      getAppleLookup(
+        getPortfolioGameAppId(game, game.lookupCountry || "us"),
+        game.lookupCountry || "us"
+      ).catch((error) =>
+        getFallbackAppleLookup(
+          getPortfolioGameAppId(game, game.lookupCountry || "us"),
+          game.lookupCountry || "us",
+          error
+        )
+      )
+    )
+  );
+
+  return {
+    markets: markets.map(({ country, label }) => ({ country, label })),
+    games: games.map((game, gameIndex) => ({
+      ...game,
+      lookup: lookups[gameIndex],
+      rankings: marketFeeds.map((market) => {
+        const appId = getPortfolioGameAppId(game, market.country);
+        const found = market.entries.find((entry) => entry.id === appId);
+        return {
+          country: market.country,
+          label: market.label,
+          appId,
+          rank: found?.rank ?? null,
+          topLimit: 100,
+          updatedAt: market.updatedAt,
+          storeUrl: found?.url || `https://apps.apple.com/${market.country}/app/id${appId}`,
+          error: market.error || ""
+        };
+      })
+    }))
+  };
+}
+
 function decodeHtml(value = "") {
   return value
     .replace(/&quot;/g, "\"")
@@ -1618,7 +1742,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
   const now = new Date().toISOString();
   const metrics = await Promise.all(
     selectedDashboards.map(async (dashboard) => {
-      const [steam, steamReviews, steamTopSellers, secondarySteam, stockQuote, tapTap, exchangeRates] = await Promise.all([
+      const [steam, steamReviews, steamTopSellers, secondarySteam, stockQuote, tapTap, exchangeRates, gamePortfolio] = await Promise.all([
         dashboard.steamAppId ? getSteamMetric(dashboard.steamAppId).catch((error) => ({ error: error.message })) : null,
         dashboard.steamAppId
           ? getSteamReviewMetric(dashboard.steamAppId).catch((error) => ({ error: error.message }))
@@ -1634,7 +1758,14 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
         dashboard.secondarySteamApp ? getSteamEditionMetric(dashboard.secondarySteamApp) : null,
         dashboard.stockQuote ? getStockQuote(dashboard.stockQuote).catch((error) => ({ error: error.message })) : null,
         dashboard.tapTap ? getTapTapMetric(dashboard.tapTap).catch((error) => ({ ...dashboard.tapTap, error: error.message })) : null,
-        dashboard.exchangeRates ? getExchangeRates().catch((error) => ({ error: error.message })) : null
+        dashboard.exchangeRates ? getExchangeRates().catch((error) => ({ error: error.message })) : null,
+        dashboard.portfolioGames
+          ? getAppleGamePortfolio(dashboard).catch((error) => ({
+              markets: dashboard.portfolioMarkets || [],
+              games: [],
+              error: error.message || "Portfolio unavailable"
+            }))
+          : null
       ]);
       const apple = await Promise.all(
         (dashboard.appleMonitors || []).map(async (listing) => {
@@ -1718,6 +1849,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
         stockQuote,
         tapTap,
         exchangeRates,
+        gamePortfolio,
         apple,
         amazon,
         researchReports,

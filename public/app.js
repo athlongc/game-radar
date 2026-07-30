@@ -17,7 +17,7 @@ const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit"
 });
-const PUBLIC_DASHBOARD_IDS = ["heartopia", "torchlight-infinite"];
+const PUBLIC_DASHBOARD_IDS = ["heartopia", "torchlight-infinite", "shiji-huatong"];
 const PUBLIC_DASHBOARD_ID = PUBLIC_DASHBOARD_IDS[0];
 const IOS_FREE_RANK_GROUP_COUNTRIES = ["cn", "tw", "kr", "th"];
 const IOS_FREE_RANK_GROUP_LABELS = {
@@ -33,8 +33,13 @@ const COUNTRY_LABELS = {
   th: "泰国",
   jp: "日本",
   us: "美国",
+  de: "德国",
+  gb: "英国",
+  ca: "加拿大",
   fr: "法国",
+  au: "澳大利亚",
   br: "巴西",
+  it: "意大利",
   ru: "俄罗斯",
   sg: "新加坡"
 };
@@ -531,6 +536,10 @@ function usesRegionalGameComparison(dashboard) {
   return dashboard.id === PUBLIC_DASHBOARD_ID || dashboard.layout === "regionalGameComparison";
 }
 
+function usesGamePortfolio(dashboard) {
+  return dashboard.layout === "gamePortfolio";
+}
+
 function renderNav(dashboards, activeId) {
   if (dashboards.length <= 1) {
     pageNavEl.innerHTML = "";
@@ -837,9 +846,102 @@ function renderRegionalGameSummary(dashboard) {
   `;
 }
 
+function getPortfolioRankTone(rank) {
+  if (!rank) return "outside";
+  if (rank <= 10) return "top-ten";
+  if (rank <= 50) return "top-fifty";
+  return "";
+}
+
+function renderPortfolioMarketRank(ranking) {
+  const value = ranking.error ? "暂无" : formatRank(ranking.rank, ranking.topLimit);
+  const body = `
+    <span class="portfolio-market-name">${escapeHtml(ranking.label)}</span>
+    <span class="portfolio-market-code">${escapeHtml(ranking.country.toUpperCase())}</span>
+    <strong class="portfolio-market-value ${getPortfolioRankTone(ranking.rank)}">${escapeHtml(value)}</strong>
+  `;
+  const url = safeExternalUrl(ranking.storeUrl);
+  return url
+    ? `<a class="portfolio-market-rank" href="${url}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(
+        `${ranking.label} iOS 游戏畅销榜 ${value}`
+      )}">${body}</a>`
+    : `<div class="portfolio-market-rank">${body}</div>`;
+}
+
+function renderPortfolioGame(game, index) {
+  const rankings = game.rankings || [];
+  const rankedMarkets = rankings.filter((ranking) => Number.isFinite(Number(ranking.rank)) && Number(ranking.rank) > 0);
+  const bestRanking = rankedMarkets.sort((left, right) => left.rank - right.rank)[0] || null;
+  const artwork = game.lookup?.artworkUrl100
+    ? `<img src="${escapeHtml(game.lookup.artworkUrl100)}" alt="" width="58" height="58">`
+    : `<span class="portfolio-game-placeholder" aria-hidden="true">${escapeHtml(game.title.slice(0, 1))}</span>`;
+  const sourceUrl = safeExternalUrl(game.externalUrl || game.lookup?.storeUrl || "");
+
+  return `
+    <article class="portfolio-game-card portfolio-game-${index + 1}">
+      <header class="portfolio-game-head">
+        <div class="portfolio-game-identity">
+          <div class="portfolio-game-art">${artwork}</div>
+          <div>
+            <p class="portfolio-game-index">Game ${String(index + 1).padStart(2, "0")}</p>
+            <h2>${escapeHtml(game.title)}</h2>
+            <p>${escapeHtml(game.internationalTitle || game.lookup?.name || "")}</p>
+          </div>
+        </div>
+        <div class="portfolio-game-overview">
+          <span>${rankedMarkets.length} / ${rankings.length} 市场进入 Top 100</span>
+          <strong>${bestRanking ? `最高 #${bestRanking.rank}` : "暂未上榜"}</strong>
+          ${
+            sourceUrl
+              ? `<a href="${sourceUrl}" target="_blank" rel="noreferrer">${escapeHtml(game.externalLabel || "App Store")}</a>`
+              : ""
+          }
+        </div>
+      </header>
+      <div class="portfolio-rank-grid">
+        ${rankings.map(renderPortfolioMarketRank).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderGamePortfolioSummary(dashboard) {
+  const portfolio = dashboard.gamePortfolio || {};
+  if (portfolio.error) {
+    return `<section class="portfolio-error"><strong>榜单暂时无法读取</strong><span>${escapeHtml(portfolio.error)}</span></section>`;
+  }
+  return `
+    <section class="portfolio-intro" aria-label="监控范围">
+      <div>
+        <p class="section-kicker">iOS Grossing Monitor</p>
+        <strong>4 款游戏</strong>
+        <span>横向观察世纪华通重点产品的全球收入榜表现</span>
+      </div>
+      <div class="portfolio-intro-stat">
+        <strong>12</strong>
+        <span>大游戏市场</span>
+      </div>
+      <div class="portfolio-intro-stat">
+        <strong>Top 100</strong>
+        <span>实时榜单范围</span>
+      </div>
+    </section>
+    <div class="portfolio-game-list">
+      ${(portfolio.games || []).map(renderPortfolioGame).join("")}
+    </div>
+    <p class="portfolio-footnote">排名来自各地区 App Store iPhone 游戏畅销榜；“&gt;100”表示未进入当前 Top 100。点击单个市场可打开对应地区商店页面。</p>
+  `;
+}
+
 function renderSummary(dashboard) {
+  const isPortfolioDashboard = usesGamePortfolio(dashboard);
   const isRegionalGameDashboard = usesRegionalGameComparison(dashboard);
+  summaryEl.classList.toggle("portfolio-summary", isPortfolioDashboard);
   summaryEl.classList.toggle("heartopia-summary", isRegionalGameDashboard);
+  if (isPortfolioDashboard) {
+    summaryEl.innerHTML = renderGamePortfolioSummary(dashboard);
+    return;
+  }
   if (isRegionalGameDashboard) {
     summaryEl.innerHTML = renderRegionalGameSummary(dashboard);
     return;
@@ -1181,6 +1283,11 @@ function renderAmazonSummaryNavimowItem(item) {
 }
 
 function renderMonitorList(dashboard) {
+  if (usesGamePortfolio(dashboard)) {
+    monitorListEl.innerHTML = "";
+    return;
+  }
+
   if (dashboard.amazon?.length) {
     renderAmazonMonitorList(dashboard);
     return;
