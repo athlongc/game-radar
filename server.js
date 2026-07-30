@@ -323,7 +323,7 @@ const dashboards = [
       },
       {
         id: "tasty-travels",
-        title: "Tasty Travels: Merge Game",
+        title: "美味旅行 / Tasty Travels: Merge Game",
         internationalTitle: "Merge and Explore",
         appId: "6471045672",
         lookupCountry: "us",
@@ -333,7 +333,7 @@ const dashboards = [
       {
         id: "hotel-journey",
         title: "飯店奇旅",
-        internationalTitle: "Merge & Makeover",
+        internationalTitle: "Hotel Legacy: Merge Game",
         appId: "6752886832",
         lookupCountry: "us"
       }
