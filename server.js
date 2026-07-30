@@ -10,7 +10,6 @@ const APPLE_SIMULATION_GENRE_ID = "7015";
 const TORCHLIGHT_OVERSEAS_DIANDIAN_URL =
   "https://app.diandian.com/app/nw2uwuzze0jwdfr/ios-grank?market=1&country=125&system=4&id=1593130084&n=火炬之光：無限";
 const TORCHLIGHT_CN_QIMAI_URL = "https://www.qimai.cn/app/rank/appid/1528917194/country/cn";
-const TASTY_TRAVELS_APPMAGIC_URL = "https://appmagic.rocks/iphone/tasty-travels-merge-game/6471045672";
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
 const NAVIMOW_NEWSROOM_URL = "https://navimow.com/blogs/newsroom";
 const NAVIMOW_NEWSROOM_ATOM_URL = "https://navimow.com/blogs/newsroom.atom";
@@ -326,9 +325,7 @@ const dashboards = [
         title: "美味旅行 / Tasty Travels: Merge Game",
         internationalTitle: "Merge and Explore",
         appId: "6471045672",
-        lookupCountry: "us",
-        externalUrl: TASTY_TRAVELS_APPMAGIC_URL,
-        externalLabel: "AppMagic"
+        lookupCountry: "us"
       },
       {
         id: "hotel-journey",
