@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const AMAZON_CACHE_TTL_MS = 60 * 60 * 1000;
+const NAVIMOW_NEWSROOM_CACHE_TTL_MS = 15 * 60 * 1000;
 const STEAM_TOP_SELLER_TOP_LIMIT = 100;
 const STEAM_TOP_SELLER_MAX_CONCURRENCY = 2;
 const STEAM_TOP_SELLER_MAX_ATTEMPTS = 3;
@@ -13,6 +14,21 @@ const TORCHLIGHT_CN_QIMAI_URL = "https://www.qimai.cn/app/rank/appid/1528917194/
 const NAVIMOW_DIANDIAN_URL = "https://app.diandian.com/app/np2ugugwm3x1ei7/ios-grank?market=1&country=13&id=1602205067&n=Navimow";
 const NAVIMOW_NEWSROOM_URL = "https://navimow.com/blogs/newsroom";
 const NAVIMOW_NEWSROOM_ATOM_URL = "https://navimow.com/blogs/newsroom.atom";
+const NAVIMOW_NEWSROOM_READER_URL = "https://r.jina.ai/http://navimow.com/blogs/newsroom";
+const DIANDIAN_IOS_COUNTRY_IDS = {
+  us: 24,
+  cn: 75,
+  jp: 26,
+  kr: 37,
+  de: 13,
+  gb: 4,
+  ca: 78,
+  tw: 125,
+  fr: 2,
+  au: 41,
+  br: 3,
+  it: 17
+};
 const SAFE_RMB_QUERY_URL = "https://www.safe.gov.cn/AppStructured/hlw/RMBQuery.do";
 const SINA_FX_QUOTE_URL = "https://hq.sinajs.cn/list=fx_susdcnh,fx_seurcnh";
 const SINA_HKD_CNY_QUOTE_URL = "https://hq.sinajs.cn/list=fx_shkdcny";
@@ -310,6 +326,10 @@ const dashboards = [
         internationalTitle: "Whiteout Survival",
         appId: "6443575749",
         appIds: { cn: "6478492012" },
+        diandian: {
+          default: { slug: "emupu8z9x16k0br", name: "Whiteout Survival" },
+          markets: { cn: { slug: "xoupuzpmowm36tl", name: "无尽冬日" } }
+        },
         lookupCountry: "us"
       },
       {
@@ -318,13 +338,21 @@ const dashboards = [
         internationalTitle: "Kingshot",
         appId: "6739554056",
         appIds: { cn: "6748527570" },
+        diandian: {
+          default: { slug: "q3uzug1z97xoli7", name: "Kingshot" },
+          markets: { cn: { slug: "6jupurzdx6m12tw", name: "奔奔王国" } }
+        },
         lookupCountry: "us"
       },
       {
         id: "tasty-travels",
-        title: "美味旅行 / Tasty Travels: Merge Game",
-        internationalTitle: "Merge and Explore",
+        title: "美味旅行",
+        internationalTitle: "Tasty Travels: Merge Game",
         appId: "6471045672",
+        diandian: {
+          default: { slug: "6jupurpl1kkdqiw", name: "Tasty Travels: Merge Game" },
+          markets: { cn: null }
+        },
         lookupCountry: "us"
       },
       {
@@ -332,6 +360,10 @@ const dashboards = [
         title: "飯店奇旅",
         internationalTitle: "Hotel Legacy: Merge Game",
         appId: "6752886832",
+        diandian: {
+          default: { slug: "w2uwuelzejew9br", name: "Hotel Legacy: Merge Game" },
+          markets: { cn: null }
+        },
         lookupCountry: "us"
       }
     ]
@@ -388,6 +420,7 @@ const dashboards = [
       url: "https://www.ninebot.com/bin/reportList",
       pageSize: 3,
       sourceUrl: "https://zh-cn.ninebot.com/explore/investor.html",
+      detailUrl: "https://www.ninebot.com/explore/investor/report-detail.html",
       bidUrl: "https://srm2.segway-ninebot.com/#/login?showBid=1",
       jdRankUrl:
         "https://pro.jd.com/mall/active/4JRfHorUDXgL77E9YdNxSCNMKwkJ/index.html?pageNum=1&bbtf=1&queryType=1&rankId=3167530&rankType=10&fromName=ProductdetailPC&preSrc=null&currSku=10219899905845&currSpu=10034692185667&transparent=1",
@@ -572,10 +605,23 @@ const dashboards = [
   }
 ];
 
+const dashboardOrder = [
+  "ninebot-cn",
+  "navimow",
+  "amazon-mowers",
+  "heartopia",
+  "torchlight-infinite",
+  "shiji-huatong"
+];
+
+dashboards.sort((left, right) => dashboardOrder.indexOf(left.id) - dashboardOrder.indexOf(right.id));
+
 const metricsCache = new Map();
 const amazonCache = new Map();
 const steamTopSellerCache = new Map();
 const tapTapPcDownloadCache = new Map();
+const navimowNewsroomCache = new Map();
+const navimowNewsroomInFlight = new Map();
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1287,6 +1333,24 @@ function getPortfolioGameAppId(game, country) {
   return game.appIds?.[country] || game.appId;
 }
 
+function getPortfolioDiandianUrl(game, country, appId) {
+  const countryId = DIANDIAN_IOS_COUNTRY_IDS[country];
+  const marketOverrides = game.diandian?.markets || {};
+  const marketConfig = Object.prototype.hasOwnProperty.call(marketOverrides, country)
+    ? marketOverrides[country]
+    : game.diandian?.default;
+  if (!countryId || !marketConfig?.slug || !appId) return "";
+
+  const params = new URLSearchParams({
+    market: "1",
+    country: String(countryId),
+    system: "4",
+    id: String(appId),
+    n: marketConfig.name || game.internationalTitle || game.title || ""
+  });
+  return `https://app.diandian.com/app/${marketConfig.slug}/ios-rank?${params}`;
+}
+
 async function getAppleGamePortfolio(dashboard) {
   const markets = dashboard.portfolioMarkets || [];
   const games = dashboard.portfolioGames || [];
@@ -1343,7 +1407,7 @@ async function getAppleGamePortfolio(dashboard) {
           rank: found?.rank ?? null,
           topLimit: 100,
           updatedAt: market.updatedAt,
-          storeUrl: found?.url || `https://apps.apple.com/${market.country}/app/id${appId}`,
+          storeUrl: getPortfolioDiandianUrl(game, market.country, appId),
           error: market.error || ""
         };
       })
@@ -1500,6 +1564,7 @@ async function getResearchReports(config = {}) {
   return {
     label: config.label || "研报",
     sourceUrl: config.sourceUrl || "",
+    detailUrl: config.detailUrl || "",
     bidUrl: config.bidUrl || "",
     jdRankUrl: config.jdRankUrl || "",
     jdEmotorcycleRankUrl: config.jdEmotorcycleRankUrl || "",
@@ -1576,29 +1641,128 @@ function parseNavimowNewsroomHtmlCards(html = "", config = {}) {
   }).filter((item) => item.url);
 }
 
+function normalizeNavimowUrl(value = "") {
+  return String(value).replace(/^http:\/\//i, "https://");
+}
+
+function stripMarkdown(value = "") {
+  return stripHtml(value)
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseNavimowNewsroomReaderMarkdown(markdown = "", config = {}) {
+  const pageSize = config.pageSize || 6;
+  const section = (markdown.match(/(?:^|\n)# Newsroom[^\n]*\n([\s\S]*)/i)?.[1] || "").split(
+    /\n### Residential Products\b/i
+  )[0];
+  return [...section.matchAll(
+    /\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)\s*\n+\s*\*\s+([^\n]+)\s*\n+\s*\[([^\]]+)\]\(([^)]+)\)\s*\n+\s*([\s\S]*?)(?=\n+\s*\[!\[|$)/gi
+  )]
+    .slice(0, pageSize)
+    .map((match) => ({
+      id: normalizeNavimowUrl(match[3]),
+      title: stripMarkdown(match[5]) || stripMarkdown(match[1]) || "Untitled",
+      url: normalizeNavimowUrl(match[6]),
+      publishedAt: match[4].trim(),
+      publishDate: match[4].trim(),
+      author: "",
+      imageUrl: normalizeNavimowUrl(match[2]),
+      summary: stripMarkdown(match[7]).slice(0, 180)
+    }))
+    .filter((item) => item.url && item.title);
+}
+
 async function getNavimowNewsroom(config = {}) {
   const feedUrl = config.feedUrl || NAVIMOW_NEWSROOM_ATOM_URL;
-  const [xml, html] = await Promise.all([
-    fetchText(feedUrl, {
-      accept: "application/atom+xml, application/xml, text/xml, */*"
-    }),
-    fetchText(config.url || NAVIMOW_NEWSROOM_URL).catch(() => "")
-  ]);
-  const cardByUrl = new Map(parseNavimowNewsroomHtmlCards(html, config).map((item) => [item.url, item]));
-  const items = parseNavimowNewsroomAtom(xml, config).map((item) => {
-    const card = cardByUrl.get(item.url) || {};
-    return {
-      ...item,
-      imageUrl: item.imageUrl || card.imageUrl || "",
-      summary: item.summary || card.summary || ""
+  const sourceUrl = config.url || NAVIMOW_NEWSROOM_URL;
+  const cacheKey = `${feedUrl}|${sourceUrl}|${config.pageSize || 6}`;
+  const cached = navimowNewsroomCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < NAVIMOW_NEWSROOM_CACHE_TTL_MS) {
+    return { ...cached.data, cached: true };
+  }
+
+  const inFlight = navimowNewsroomInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const request = (async () => {
+    let feedError = null;
+    let xml = "";
+    try {
+      // The Atom feed contains the article titles and links we need. Keep it as
+      // the primary source so a rate-limited HTML page cannot blank the card.
+      xml = await fetchText(feedUrl, {
+        accept: "application/atom+xml, application/xml, text/xml, */*"
+      });
+    } catch (error) {
+      feedError = error;
+    }
+
+    let items = parseNavimowNewsroomAtom(xml, config);
+    let html = "";
+    if (!items.length || items.some((item) => !item.imageUrl || !item.summary)) {
+      // HTML is only an optional enrichment/fallback. Shopify currently
+      // rate-limits this route more aggressively than the Atom endpoint.
+      try {
+        html = await fetchText(sourceUrl);
+      } catch {
+        html = "";
+      }
+    }
+
+    const cardByUrl = new Map(parseNavimowNewsroomHtmlCards(html, config).map((item) => [item.url, item]));
+    items = items.map((item) => {
+      const card = cardByUrl.get(item.url) || {};
+      return {
+        ...item,
+        imageUrl: item.imageUrl || card.imageUrl || "",
+        summary: item.summary || card.summary || ""
+      };
+    });
+
+    if (!items.length) {
+      try {
+        const markdown = await fetchText(config.readerUrl || NAVIMOW_NEWSROOM_READER_URL, {
+          "accept-language": "",
+          cookie: "",
+          "user-agent": "GameRadar/0.1",
+          accept: "text/plain, text/markdown, */*"
+        });
+        items = parseNavimowNewsroomReaderMarkdown(markdown, config);
+      } catch {
+        items = [];
+      }
+    }
+
+    if (!items.length) {
+      if (cached?.data) {
+        return {
+          ...cached.data,
+          cached: true,
+          stale: true,
+          warning: feedError?.message || "Navimow newsroom refresh failed"
+        };
+      }
+      throw feedError || new Error("Navimow newsroom returned no articles");
+    }
+
+    const data = {
+      label: config.label || "Newsroom",
+      sourceUrl,
+      items,
+      updatedAt: new Date().toISOString()
     };
+    navimowNewsroomCache.set(cacheKey, { cachedAt: Date.now(), data });
+    return { ...data, cached: false };
+  })().finally(() => {
+    navimowNewsroomInFlight.delete(cacheKey);
   });
-  return {
-    label: config.label || "Newsroom",
-    sourceUrl: config.url || NAVIMOW_NEWSROOM_URL,
-    items,
-    updatedAt: new Date().toISOString()
-  };
+
+  navimowNewsroomInFlight.set(cacheKey, request);
+  return request;
 }
 
 function getSrmNoticeUrl(noticeId) {
@@ -1810,6 +1974,7 @@ async function collectMetrics(force = false, selectedDashboards = dashboards) {
         ? await getResearchReports(dashboard.researchReports).catch((error) => ({
             label: dashboard.researchReports.label || "研报",
             sourceUrl: dashboard.researchReports.sourceUrl || "",
+            detailUrl: dashboard.researchReports.detailUrl || "",
             bidUrl: dashboard.researchReports.bidUrl || "",
             jdRankUrl: dashboard.researchReports.jdRankUrl || "",
             jdEmotorcycleRankUrl: dashboard.researchReports.jdEmotorcycleRankUrl || "",

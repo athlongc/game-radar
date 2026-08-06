@@ -83,6 +83,10 @@
   overflow: hidden;
 }
 
+.portfolio-game-1 {
+  --game-accent: #2f5fae;
+}
+
 .portfolio-game-2 {
   --game-accent: #c7472f;
 }

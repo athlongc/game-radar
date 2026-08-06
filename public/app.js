@@ -929,7 +929,7 @@ function renderGamePortfolioSummary(dashboard) {
     <div class="portfolio-game-list">
       ${(portfolio.games || []).map(renderPortfolioGame).join("")}
     </div>
-    <p class="portfolio-footnote">排名来自各地区 App Store iPhone 游戏畅销榜；“&gt;100”表示未进入当前 Top 100。点击单个市场可打开对应地区商店页面。</p>
+    <p class="portfolio-footnote">排名来自各地区 App Store iPhone 游戏畅销榜；“&gt;100”表示未进入当前 Top 100。点击单个市场可打开点点实时排名；两款合成游戏暂无国区链接。</p>
   `;
 }
 
@@ -1414,7 +1414,7 @@ function renderResearchMonitorList(dashboard) {
         reports.error
           ? `<div class="rank-box"><div class="rank-value outside">暂无</div><div class="rank-label">${escapeHtml(reports.error)}</div></div>`
           : `<div class="research-list">
-              ${(reports.items || []).map(renderResearchReport).join("")}
+              ${(reports.items || []).map((report) => renderResearchReport(report, reports.detailUrl)).join("")}
             </div>`
       }
       ${notices ? renderSrmNoticePanel(notices) : ""}
@@ -1432,7 +1432,20 @@ function renderResearchMonitorList(dashboard) {
   `;
 }
 
-function renderResearchReport(report) {
+function getResearchReportUrl(report, detailUrl = "") {
+  if (report.url) return report.url;
+  if (!report.id || !detailUrl) return "";
+  try {
+    const url = new URL(detailUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    url.searchParams.set("id", report.id);
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function renderResearchReport(report, detailUrl = "") {
   const meta = [report.organizationName, report.rating ? `评级 ${report.rating}` : ""].filter(Boolean).join(" · ");
   const title = escapeHtml(report.title || "未命名研报");
   const isToday = isTodayDate(report.publishDate);
@@ -1447,8 +1460,9 @@ function renderResearchReport(report) {
     <time>${escapeHtml(report.publishDate || "")}</time>
   `;
   const className = `research-item${isToday ? " research-report-today" : ""}`;
-  if (report.url) {
-    return `<a class="${className}" href="${escapeHtml(report.url)}" target="_blank" rel="noreferrer">${body}</a>`;
+  const url = safeExternalUrl(getResearchReportUrl(report, detailUrl));
+  if (url) {
+    return `<a class="${className}" href="${url}" target="_blank" rel="noreferrer">${body}</a>`;
   }
   return `<div class="${className}">${body}</div>`;
 }
