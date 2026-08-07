@@ -49,6 +49,13 @@ const TAPTAP_TREND_METRICS = [
   { key: "fansCount", label: "关注数", kind: "count" },
   { key: "latestScore", label: "近期评分", kind: "score" }
 ];
+const TAPTAP_PC_VIEW = {
+  id: "taptap-pc",
+  title: "Tap PC",
+  pageTitle: "TapTap PC 在线人数",
+  subtitle: "第三方公开看板 · 每小时更新",
+  url: "https://as167888.github.io/taptap-online-dashboard/"
+};
 
 let currentMetrics = null;
 let tapTapHistory = { games: {} };
@@ -523,13 +530,91 @@ function getCurrentDashboard(metrics) {
   return metrics.dashboards.find((dashboard) => dashboard.id === id) || metrics.dashboards[0];
 }
 
+function isTapTapPcView() {
+  return decodeURIComponent(location.hash.replace(/^#/, "")) === TAPTAP_PC_VIEW.id;
+}
+
 function render(metrics) {
+  if (isTapTapPcView()) {
+    renderNav(metrics.dashboards, TAPTAP_PC_VIEW.id);
+    renderTapTapPcView();
+    return;
+  }
+
   const dashboard = getCurrentDashboard(metrics);
   pageTitleEl.textContent = dashboard.title;
   pageSubtitleEl.textContent = dashboard.subtitle || "实时榜单";
+  refreshButton.textContent = "刷新";
+  statusEl.textContent = `${formatTime(metrics.generatedAt)}${metrics.cached ? " · 缓存" : ""}`;
+  monitorListEl.classList.remove("taptap-pc-view");
   renderNav(metrics.dashboards, dashboard.id);
   renderSummary(dashboard);
   renderMonitorList(dashboard);
+}
+
+function renderTapTapPcView() {
+  pageTitleEl.textContent = TAPTAP_PC_VIEW.pageTitle;
+  pageSubtitleEl.textContent = TAPTAP_PC_VIEW.subtitle;
+  refreshButton.textContent = "重新加载";
+  statusEl.textContent = "外部看板 · 页面直连";
+  summaryEl.classList.remove("portfolio-summary", "heartopia-summary");
+  summaryEl.innerHTML = "";
+  monitorListEl.classList.add("taptap-pc-view");
+  monitorListEl.innerHTML = `
+    <section class="taptap-pc-panel" aria-labelledby="tapTapPcPanelTitle">
+      <header class="taptap-pc-toolbar">
+        <div>
+          <div class="taptap-pc-heading-row">
+            <span class="taptap-pc-live-dot" aria-hidden="true"></span>
+            <h2 id="tapTapPcPanelTitle">TapTap PC 在线人数看板</h2>
+            <span class="taptap-pc-badge">嵌入预览</span>
+          </div>
+          <p>内容由第三方网站直接提供，数据与原站同步。</p>
+        </div>
+        <a class="taptap-pc-open" href="${TAPTAP_PC_VIEW.url}" target="_blank" rel="noreferrer">打开原站 ↗</a>
+      </header>
+      <div class="taptap-pc-frame-wrap">
+        <iframe
+          id="tapTapPcFrame"
+          class="taptap-pc-frame"
+          src="${TAPTAP_PC_VIEW.url}"
+          title="TapTap PC 在线人数第三方看板"
+          loading="eager"
+          referrerpolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-popups"
+        ></iframe>
+      </div>
+      <footer class="taptap-pc-footer">
+        <span>数据来源：as167888 / TapTap Online Dashboard</span>
+        <span>若嵌入页面无法显示，请使用“打开原站”。</span>
+      </footer>
+    </section>
+  `;
+
+  document.querySelector("#tapTapPcFrame")?.addEventListener(
+    "load",
+    () => {
+      statusEl.textContent = "外部看板 · 已载入";
+      refreshButton.disabled = false;
+    },
+    { once: true }
+  );
+}
+
+function reloadTapTapPcView() {
+  const frame = document.querySelector("#tapTapPcFrame");
+  if (!(frame instanceof HTMLIFrameElement)) return;
+  refreshButton.disabled = true;
+  statusEl.textContent = "正在重新加载外部看板";
+  frame.addEventListener(
+    "load",
+    () => {
+      statusEl.textContent = "外部看板 · 已载入";
+      refreshButton.disabled = false;
+    },
+    { once: true }
+  );
+  frame.src = TAPTAP_PC_VIEW.url;
 }
 
 function usesRegionalGameComparison(dashboard) {
@@ -541,15 +626,11 @@ function usesGamePortfolio(dashboard) {
 }
 
 function renderNav(dashboards, activeId) {
-  if (dashboards.length <= 1) {
-    pageNavEl.innerHTML = "";
-    return;
-  }
-  pageNavEl.innerHTML = dashboards
+  pageNavEl.innerHTML = [...dashboards, TAPTAP_PC_VIEW]
     .map(
       (dashboard) => `
         <a class="nav-link ${dashboard.id === activeId ? "active" : ""}" href="#${dashboard.id}">
-          ${dashboard.title}
+          ${escapeHtml(dashboard.title)}
         </a>
       `
     )
@@ -1820,7 +1901,6 @@ async function load(force = false) {
     currentMetrics = metrics;
     tapTapHistory = history;
     render(currentMetrics);
-    statusEl.textContent = `${formatTime(currentMetrics.generatedAt)}${currentMetrics.cached ? " · 缓存" : ""}`;
   } catch (error) {
     statusEl.textContent = `加载失败：${error.message}`;
   } finally {
@@ -1828,10 +1908,18 @@ async function load(force = false) {
   }
 }
 
-refreshButton.addEventListener("click", () => load(true));
+refreshButton.addEventListener("click", () => {
+  if (isTapTapPcView()) {
+    reloadTapTapPcView();
+    return;
+  }
+  load(true);
+});
 window.addEventListener("hashchange", () => {
   if (currentMetrics) render(currentMetrics);
 });
 
 load();
-setInterval(() => load(), 5 * 60 * 1000);
+setInterval(() => {
+  if (!isTapTapPcView()) load();
+}, 5 * 60 * 1000);
