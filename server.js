@@ -302,7 +302,7 @@ const dashboards = [
   {
     id: "shiji-huatong",
     title: "世纪华通",
-    subtitle: "四款游戏 · 12 大市场 iOS 游戏畅销榜",
+    subtitle: "五款游戏 · 12 大市场 iOS 游戏畅销榜",
     publisher: "世纪华通 / Century Games",
     layout: "gamePortfolio",
     portfolioMarkets: [
@@ -362,6 +362,17 @@ const dashboards = [
         appId: "6752886832",
         diandian: {
           default: { slug: "w2uwuelzejew9br", name: "Hotel Legacy: Merge Game" },
+          markets: { cn: null }
+        },
+        lookupCountry: "us"
+      },
+      {
+        id: "lordrush",
+        title: "Lordrush",
+        internationalTitle: "Medieval Tower Defense Game",
+        appId: "6759788962",
+        diandian: {
+          default: { slug: "xoupuz570q7x2fl", name: "Lordrush" },
           markets: { cn: null }
         },
         lookupCountry: "us"

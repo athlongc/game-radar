@@ -991,15 +991,23 @@ function renderGamePortfolioSummary(dashboard) {
   if (portfolio.error) {
     return `<section class="portfolio-error"><strong>榜单暂时无法读取</strong><span>${escapeHtml(portfolio.error)}</span></section>`;
   }
+  const games = portfolio.games || [];
+  const marketCount = (portfolio.markets || []).length;
+  const unavailableChinaGames = games
+    .filter((game) => (game.rankings || []).some((ranking) => ranking.country === "cn" && !ranking.storeUrl))
+    .map((game) => game.title);
+  const chinaLinkNote = unavailableChinaGames.length
+    ? `；${escapeHtml(unavailableChinaGames.join("、"))}暂无国区链接。`
+    : "。";
   return `
     <section class="portfolio-intro" aria-label="监控范围">
       <div>
         <p class="section-kicker">iOS Grossing Monitor</p>
-        <strong>4 款游戏</strong>
+        <strong>${games.length} 款游戏</strong>
         <span>横向观察世纪华通重点产品的全球收入榜表现</span>
       </div>
       <div class="portfolio-intro-stat">
-        <strong>12</strong>
+        <strong>${marketCount}</strong>
         <span>大游戏市场</span>
       </div>
       <div class="portfolio-intro-stat">
@@ -1008,9 +1016,9 @@ function renderGamePortfolioSummary(dashboard) {
       </div>
     </section>
     <div class="portfolio-game-list">
-      ${(portfolio.games || []).map(renderPortfolioGame).join("")}
+      ${games.map(renderPortfolioGame).join("")}
     </div>
-    <p class="portfolio-footnote">排名来自各地区 App Store iPhone 游戏畅销榜；“&gt;100”表示未进入当前 Top 100。点击单个市场可打开点点实时排名；两款合成游戏暂无国区链接。</p>
+    <p class="portfolio-footnote">排名来自各地区 App Store iPhone 游戏畅销榜；“&gt;100”表示未进入当前 Top 100。点击单个市场可打开点点实时排名${chinaLinkNote}</p>
   `;
 }
 
