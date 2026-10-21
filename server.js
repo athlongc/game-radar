@@ -302,7 +302,7 @@ const dashboards = [
   {
     id: "shiji-huatong",
     title: "世纪华通",
-    subtitle: "五款游戏 · 12 大市场 iOS 游戏畅销榜",
+    subtitle: "六款游戏 · 12 大市场 iOS 游戏畅销榜",
     publisher: "世纪华通 / Century Games",
     layout: "gamePortfolio",
     portfolioMarkets: [
@@ -373,6 +373,17 @@ const dashboards = [
         appId: "6759788962",
         diandian: {
           default: { slug: "xoupuz570q7x2fl", name: "Lordrush" },
+          markets: { cn: null }
+        },
+        lookupCountry: "us"
+      },
+      {
+        id: "top-force-commander",
+        title: "Top Force: Commander",
+        internationalTitle: "Military Strategy Game",
+        appId: "6761893238",
+        diandian: {
+          default: { slug: "jzumu69j7ex5dcp", name: "Top Force: Commander" },
           markets: { cn: null }
         },
         lookupCountry: "us"

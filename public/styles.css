@@ -103,6 +103,10 @@
   --game-accent: #278269;
 }
 
+.portfolio-game-6 {
+  --game-accent: #687d39;
+}
+
 .portfolio-game-head {
   align-items: center;
   border-bottom: 1px solid var(--soft);
