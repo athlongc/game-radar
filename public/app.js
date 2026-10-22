@@ -53,8 +53,8 @@ const TAPTAP_PC_VIEW = {
   id: "taptap-pc",
   title: "Tap PC",
   pageTitle: "TapTap PC 在线人数",
-  subtitle: "第三方公开看板 · 每小时更新",
-  url: "https://as167888.github.io/taptap-online-dashboard/"
+  subtitle: "第三方公开看板 · 与原站同步",
+  url: "https://data.horgrix.com/taptap"
 };
 
 let currentMetrics = null;
@@ -585,7 +585,7 @@ function renderTapTapPcView() {
         ></iframe>
       </div>
       <footer class="taptap-pc-footer">
-        <span>数据来源：as167888 / TapTap Online Dashboard</span>
+        <span>数据来源：data.horgrix.com</span>
         <span>若嵌入页面无法显示，请使用“打开原站”。</span>
       </footer>
     </section>
