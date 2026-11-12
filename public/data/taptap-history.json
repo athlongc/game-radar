@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timezone": "Asia/Shanghai",
-  "updatedAt": "2026-11-11T22:39:03.881Z",
+  "updatedAt": "2026-11-12T22:12:29.402Z",
   "games": {
     "heartopia": {
       "appId": "45213",
@@ -1908,6 +1908,22 @@
           "latestReviewCount": 705,
           "latestVersionScore": 8.7,
           "latestVersionReviewCount": 8292,
+          "version": "0.6.1",
+          "updateDate": "2026-11-12"
+        },
+        {
+          "date": "2026-11-13",
+          "capturedAt": "2026-11-12T22:12:29.402Z",
+          "downloadCount": 62511803,
+          "mobileDownloadCount": 62093925,
+          "pcDownloadCount": 417878,
+          "fansCount": 40001108,
+          "reviewCount": 255306,
+          "rating": 8.6,
+          "latestScore": 8.3,
+          "latestReviewCount": 1043,
+          "latestVersionScore": 7.8,
+          "latestVersionReviewCount": 394,
           "version": "0.6.1",
           "updateDate": "2026-11-12"
         }
@@ -3818,6 +3834,22 @@
           "latestReviewCount": 85,
           "latestVersionScore": 5.9,
           "latestVersionReviewCount": 262,
+          "version": "17.0.0",
+          "updateDate": "2026-11-06"
+        },
+        {
+          "date": "2026-11-13",
+          "capturedAt": "2026-11-12T22:12:29.402Z",
+          "downloadCount": 6702484,
+          "mobileDownloadCount": 5528005,
+          "pcDownloadCount": 1174479,
+          "fansCount": 3896887,
+          "reviewCount": 26560,
+          "rating": 7.4,
+          "latestScore": 5.1,
+          "latestReviewCount": 75,
+          "latestVersionScore": 6,
+          "latestVersionReviewCount": 266,
           "version": "17.0.0",
           "updateDate": "2026-11-06"
         }
